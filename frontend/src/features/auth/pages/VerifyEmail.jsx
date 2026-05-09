@@ -8,7 +8,7 @@ export default function VerifyEmail() {
 
     if (!token) return;
 
-    window.location.href = `http://localhost:3000/api/auth/verify-email?token=${token}`;
+    window.location.href = `${import.meta.env.VITE_SERVER_URI}/api/auth/verify-email?token=${token}`;
   }, []);
 
   return (

@@ -15,9 +15,8 @@ const UserSchema = new mongoose.Schema(
       unique: true,
       lowercase: true,
       trim: true,
-      match: [/^\S+@\S+\.\S+$/, "Invalid email format"]
+      match: [/^\S+@\S+\.\S+$/, "Invalid email format"],
     },
-    
     password: {
       type: String,
       required: true,
@@ -25,10 +24,13 @@ const UserSchema = new mongoose.Schema(
       maxlength: 60,
       select: false,
     },
-    avatar: { type: String, default: "" },
+    avatar:   { type: String,  default: "" },
     verified: { type: Boolean, default: false },
+
+    // ── Refresh token stored in DB so we can invalidate it on logout ──────────
+    refreshToken: { type: String, default: null, select: false },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
-export default  mongoose.model("User", UserSchema);
+export default mongoose.model("User", UserSchema);

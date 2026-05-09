@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { useEffect } from "react";
 
-import Chat from "../features/chat/pagess/Chat";
+import Chat from "../features/chat/pages/Chat";
 import Login from "../features/auth/pages/Login";
 import SignUp from "../features/auth/pages/SignUp";
 import VerifyEmail from "../features/auth/pages/VerifyEmail";

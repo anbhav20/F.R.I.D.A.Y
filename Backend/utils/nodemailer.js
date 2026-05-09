@@ -17,7 +17,7 @@ transporter.verify().then(() => {
 export const sendEmail = async (to, subject, html, text) => {
     try {
         const mailOptions = {
-            from: `"Perplexity" <${process.env.EMAIL_USER}>`,  
+            from: `"F.R.I.D.A.Y" <${process.env.EMAIL_USER}>`,  
             to,
             subject,
             html,

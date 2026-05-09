@@ -1,102 +1,98 @@
-import { useState } from 'react';
-import {
-  Plus, MessageSquare, Settings, LogOut, 
-  Sparkles, Trash2, X
-} from 'lucide-react';
+import { MessageSquare, Trash2, X, Settings, LogOut, SquarePen } from "lucide-react";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../src/features/auth/hook/useAuth";
 
+// Group chats by recency
+const groupChats = (chats) => {
+  const now = Date.now();
+  const DAY  = 86400000;
+  const groups = { Today: [], Yesterday: [], "Previous 7 Days": [], Older: [] };
+  chats.forEach((c) => {
+    const diff = now - new Date(c.updatedAt).getTime();
+    if      (diff < DAY)       groups.Today.push(c);
+    else if (diff < 2 * DAY)   groups.Yesterday.push(c);
+    else if (diff < 7 * DAY)   groups["Previous 7 Days"].push(c);
+    else                       groups.Older.push(c);
+  });
+  return groups;
+};
 
-import { useAuth } from "../src/features/auth/hook/useAuth"
-import { useNavigate } from 'react-router-dom';
+export default function Sidebar({ isOpen, onClose, chats, activeChat, onNewChat, onSelectChat, onDeleteChat, user }) {
+  const { logOut }  = useAuth();
+  const navigate    = useNavigate();
+  const [hovered, setHovered] = useState(null);
 
-const Logo = () => (
-  <div className="flex items-center gap-2.5">
-    <div className="relative w-8 h-8">
-      <div className="absolute inset-0 rounded-lg bg-linear-to-br from-aurora to-teal-glow opacity-90" />
-      <div className="absolute inset-0 flex items-center justify-center">
-        <Sparkles size={15} className="text-white" />
-      </div>
-    </div>
-    <span className="text-white font-semibold text-base tracking-tight">Cloude</span>
-    <span className="text-xs bg-aurora/20 text-aurora-light px-1.5 py-0.5 rounded-md font-mono">AI</span>
-  </div>
-);
+  const grouped = groupChats(chats);
 
-export default function Sidebar({ chats, activeChat, onNewChat, onSelectChat, onDeleteChat, isOpen, onClose }) {
-  const {logOut} =useAuth()
-
-  const navigate = useNavigate();
-  const [hoveredChat, setHoveredChat] = useState(null);
-
-  const handleLogout = async() => {
+  const handleLogout = async () => {
     await logOut();
-    navigate('/login');
+    navigate("/login");
   };
 
   return (
     <>
-      {/* Mobile overlay */}
+      {/* Mobile backdrop */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-20 lg:hidden"
+          className="fixed inset-0 bg-black/50 z-20 lg:hidden"
           onClick={onClose}
         />
       )}
 
-      {/* Sidebar */}
       <aside
         className={`
           fixed lg:relative top-0 left-0 h-full z-30 lg:z-auto
-          w-72 flex flex-col bg-ink-900 border-r border-ink-700
-          transition-transform duration-300 ease-in-out
-          ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+          w-64 flex flex-col bg-[#171717]
+          transition-transform duration-200 ease-in-out
+          ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-ink-700">
-          <Logo />
-          <button onClick={onClose} className="lg:hidden btn-ghost p-1.5">
-            <X size={18} />
-          </button>
+        <div className="flex items-center justify-between px-3 py-3">
+          <span className="text-sm font-semibold text-white">F.R.I.D.A.Y</span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => { onNewChat(); onClose(); }}
+              className="p-2 rounded-lg hover:bg-white/10 transition text-zinc-400 hover:text-white"
+              title="New chat"
+            >
+              <SquarePen size={16} />
+            </button>
+            <button onClick={onClose} className="lg:hidden p-2 rounded-lg hover:bg-white/10 text-zinc-400">
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
-        {/* New Chat */}
-        <div className="px-3 pt-3 pb-2">
-          <button
-            onClick={onNewChat}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-aurora/10 hover:bg-aurora/20 border border-aurora/20 hover:border-aurora/40 text-aurora-light text-sm font-medium transition-all duration-200 group"
-          >
-            <Plus size={16} className="group-hover:rotate-90 transition-transform duration-200" />
-            New conversation
-          </button>
-        </div>
+        {/* Chat list */}
+        <div className="flex-1 overflow-y-auto px-2 py-1 space-y-4
+          scrollbar-thin scrollbar-track-transparent scrollbar-thumb-zinc-700">
 
-        {/* Chat History */}
-        <div className="flex-1 overflow-y-auto px-3 py-2 space-y-4">
-          {Object.entries(groupedChats).map(([group, items]) =>
+          {Object.entries(grouped).map(([group, items]) =>
             items.length > 0 ? (
               <div key={group}>
-                <p className="text-xs text-slate-600 font-medium px-2 mb-1.5 uppercase tracking-wider">{group}</p>
+                <p className="text-xs text-zinc-500 font-medium px-2 mb-1">{group}</p>
                 <div className="space-y-0.5">
                   {items.map((chat) => (
                     <div
-                      key={chat.id}
-                      onMouseEnter={() => setHoveredChat(chat.id)}
-                      onMouseLeave={() => setHoveredChat(null)}
-                      onClick={() => { onSelectChat(chat.id); onClose(); }}
+                      key={chat._id}
+                      onMouseEnter={() => setHovered(chat._id)}
+                      onMouseLeave={() => setHovered(null)}
+                      onClick={() => { onSelectChat(chat); onClose(); }}
                       className={`
-                        group relative flex items-center gap-2.5 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-150
-                        ${activeChat === chat.id
-                          ? 'bg-surface-raised text-white border border-ink-600'
-                          : 'text-slate-400 hover:text-white hover:bg-surface-hover'
+                        group relative flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer transition-colors
+                        ${activeChat?._id === chat._id
+                          ? "bg-white/10 text-white"
+                          : "text-zinc-400 hover:text-white hover:bg-white/5"
                         }
                       `}
                     >
-                      <MessageSquare size={14} className="shrink-0 opacity-60" />
-                      <span className="text-sm truncate flex-1">{chat.title}</span>
-                      {hoveredChat === chat.id && (
+                      <span className="text-xs truncate flex-1">{chat.title}</span>
+                      {hovered === chat._id && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); onDeleteChat(chat.id); }}
-                          className="shrink-0 p-1 rounded-md hover:bg-red-500/20 hover:text-red-400 transition-colors"
+                          onClick={(e) => { e.stopPropagation(); onDeleteChat(chat._id); }}
+                          className="shrink-0 p-1 rounded hover:text-red-400 transition-colors"
                         >
                           <Trash2 size={12} />
                         </button>
@@ -109,35 +105,33 @@ export default function Sidebar({ chats, activeChat, onNewChat, onSelectChat, on
           )}
 
           {chats.length === 0 && (
-            <div className="text-center py-8">
-              <MessageSquare size={28} className="text-slate-700 mx-auto mb-2" />
-              <p className="text-slate-600 text-xs">No conversations yet</p>
+            <div className="text-center py-10">
+              <p className="text-zinc-600 text-xs">No conversations yet</p>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="border-t border-ink-700 p-3 space-y-1">
-          <button className="sidebar-item w-full">
-            <Settings size={16} />
+        <div className="border-t border-white/5 p-2 space-y-0.5">
+          <button className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 text-xs transition">
+            <Settings size={14} />
             Settings
           </button>
           <button
             onClick={handleLogout}
-            className="sidebar-item w-full text-slate-500 hover:text-red-400 hover:bg-red-500/10"
+            className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 text-xs transition"
           >
-            <LogOut size={16} />
+            <LogOut size={14} />
             Sign out
           </button>
 
-          {/* User info */}
-          <div className="flex items-center gap-3 px-3 py-2.5 mt-1 rounded-xl bg-surface-raised border border-ink-600">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-aurora to-teal-glow flex items-center justify-center text-white text-sm font-semibold shrink-0">
-              {user?.avatar}
+          {/* User */}
+          <div className="flex items-center gap-2.5 px-3 py-2 mt-1 rounded-lg hover:bg-white/5 transition cursor-default">
+            <div className="w-7 h-7 rounded-full bg-zinc-600 flex items-center justify-center text-white text-xs font-semibold shrink-0">
+              {user?.username?.[0]?.toUpperCase() ?? "U"}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-white text-sm font-medium truncate">{user?.username || 'User'}</p>
-              <p className="text-slate-500 text-xs truncate">{user?.email}</p>
+              <p className="text-white text-xs font-medium truncate">{user?.username ?? "User"}</p>
             </div>
           </div>
         </div>

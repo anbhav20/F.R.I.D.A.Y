@@ -15,6 +15,11 @@ const authSlice = createSlice({
       state.user = action.payload;
     },
 
+    // ← new: called when refresh token expires → forces logout
+    clearUser(state) {
+      state.user = null;
+    },
+
     setLoading(state, action) {
       state.loading = action.payload;
     },
@@ -36,6 +41,7 @@ const authSlice = createSlice({
 
 export const {
   setUser,
+  clearUser,
   setLoading,
   setError,
   setMessage,
