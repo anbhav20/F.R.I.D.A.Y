@@ -8,10 +8,10 @@ import SignUp from "../features/auth/pages/SignUp";
 import VerifyEmail from "../features/auth/pages/VerifyEmail";
 import { useAuth } from "../features/auth/hook/useAuth";
 
-function PrivateRoute({ children }) {
+// ── Runs once on app mount, resolves auth state ───────────────────────────────
+function AuthInitializer() {
   const { GetMe } = useAuth();
-
-  const { user, loading } = useSelector((state) => state.auth);
+  const { user } = useSelector((state) => state.auth);
 
   useEffect(() => {
     if (!user) {
@@ -19,10 +19,22 @@ function PrivateRoute({ children }) {
     }
   }, []);
 
-  if (loading) {
+  return null;
+}
+
+function PrivateRoute({ children }) {
+  const { user, initializing } = useSelector((state) => state.auth);
+
+  if (initializing) {
     return (
-      <div className="h-screen bg-black text-white flex items-center justify-center">
-        Loading...
+      <div className="h-screen bg-[#212121] text-white flex items-center justify-center">
+        <div className="flex items-center gap-2 text-zinc-500 text-sm">
+          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+          </svg>
+          Loading...
+        </div>
       </div>
     );
   }
@@ -31,7 +43,21 @@ function PrivateRoute({ children }) {
 }
 
 function PublicRoute({ children }) {
-  const { user } = useSelector((state) => state.auth);
+  const { user, initializing } = useSelector((state) => state.auth);
+
+  if (initializing) {
+    return (
+      <div className="h-screen bg-[#212121] flex items-center justify-center">
+        <div className="flex items-center gap-2 text-zinc-500 text-sm">
+          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+          </svg>
+          Loading...
+        </div>
+      </div>
+    );
+  }
 
   return !user ? children : <Navigate to="/chat" />;
 }
@@ -39,12 +65,12 @@ function PublicRoute({ children }) {
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
+      {/* Runs once regardless of which route is visited */}
+      <AuthInitializer />
 
-        {/* Default Route */}
+      <Routes>
         <Route path="/" element={<Navigate to="/login" />} />
 
-        {/* Public Routes */}
         <Route
           path="/login"
           element={
@@ -72,7 +98,6 @@ export default function App() {
           }
         />
 
-        {/* Protected Route */}
         <Route
           path="/chat"
           element={

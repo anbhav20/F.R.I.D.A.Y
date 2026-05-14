@@ -6,6 +6,7 @@ const authSlice = createSlice({
   initialState: {
     user: null,
     loading: false,
+    initializing: true,  // true until first GetMe resolves
     error: null,
     message: null,
   },
@@ -15,13 +16,16 @@ const authSlice = createSlice({
       state.user = action.payload;
     },
 
-    // ← new: called when refresh token expires → forces logout
     clearUser(state) {
       state.user = null;
     },
 
     setLoading(state, action) {
       state.loading = action.payload;
+    },
+
+    setInitializing(state, action) {
+      state.initializing = action.payload;
     },
 
     setError(state, action) {
@@ -43,6 +47,7 @@ export const {
   setUser,
   clearUser,
   setLoading,
+  setInitializing,
   setError,
   setMessage,
   clearMessage,

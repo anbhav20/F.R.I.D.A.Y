@@ -1,15 +1,13 @@
 import axios from "axios";
 import { store } from "../app/app.store";
-import { setError, setMessage, clearUser } from "./auth/auth.slice";  // add clearUser to your slice
+import { setError, setMessage, clearUser } from "./auth/auth.slice";
 
 export const api = axios.create({
-  baseURL: "http://localhost:3000/api/auth",
+  baseURL: `${import.meta.env.VITE_SERVER_URI}/api`,
   withCredentials: true,
 });
 
-// ── Refresh token logic ───────────────────────────────────────────────────────
 let isRefreshing = false;
-// Queue of requests that came in while refresh was in progress
 let failedQueue  = [];
 
 const processQueue = (error) => {
@@ -17,7 +15,6 @@ const processQueue = (error) => {
   failedQueue = [];
 };
 
-// ── Response interceptor ──────────────────────────────────────────────────────
 api.interceptors.response.use(
   (response) => {
     const message = response.data?.message;
@@ -29,34 +26,46 @@ api.interceptors.response.use(
   },
 
   async (error) => {
-    const original = error.config;
-    const code     = error.response?.data?.code;
-    const status   = error.response?.status;
+    const original      = error.config;
+    const status        = error.response?.status;
+    const isRefreshCall = original.url?.includes("/refresh");
+    const isMeCall      = original.url?.includes("/me");
 
-    // ── Access token expired → try refresh ───────────────────────────────────
-    if (status === 401 && code === "TOKEN_EXPIRED" && !original._retry) {
-      original._retry = true;  // prevent infinite loop
+    // ── Refresh call itself failed → force logout ─────────────────────────────
+    if (isRefreshCall && status === 401) {
+      store.dispatch(clearUser());
+      store.dispatch(setError("Session expired. Please log in again."));
+      window.location.href = "/login";
+      return Promise.reject(error);
+    }
+
+    // ── /me failed → not logged in, just reject silently ─────────────────────
+    // GetMe() handles this in its catch block by setting user to null
+    // Don't redirect or attempt refresh — let initializing flip to false cleanly
+    if (isMeCall && status === 401) {
+      return Promise.reject(error);
+    }
+
+    // ── Any other 401 on a non-refresh endpoint → attempt refresh ────────────
+    if (status === 401 && !original._retry && !isRefreshCall) {
+      original._retry = true;
 
       if (isRefreshing) {
-        // Another request is already refreshing — wait in queue
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
         })
-          .then(() => api(original))   // retry original request after refresh
+          .then(() => api(original))
           .catch((err) => Promise.reject(err));
       }
 
       isRefreshing = true;
 
       try {
-        // Call refresh endpoint — backend sets new access token cookie automatically
-        await api.post("/refresh");
-        processQueue(null);             // unblock waiting requests
-        return api(original);           // retry the original failed request
+        await api.post("/auth/refresh");
+        processQueue(null);
+        return api(original);
       } catch (refreshError) {
         processQueue(refreshError);
-
-        // Refresh token is also expired or invalid → force logout
         store.dispatch(clearUser());
         store.dispatch(setError("Session expired. Please log in again."));
         window.location.href = "/login";
@@ -64,14 +73,6 @@ api.interceptors.response.use(
       } finally {
         isRefreshing = false;
       }
-    }
-
-    // ── Refresh token itself expired (called from /refresh endpoint) ──────────
-    if (status === 401 && code === "REFRESH_EXPIRED") {
-      store.dispatch(clearUser());
-      store.dispatch(setError("Session expired. Please log in again."));
-      window.location.href = "/login";
-      return Promise.reject(error);
     }
 
     // ── All other errors ──────────────────────────────────────────────────────

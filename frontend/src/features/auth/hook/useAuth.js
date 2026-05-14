@@ -1,7 +1,6 @@
 import { useDispatch } from "react-redux";
-
 import { register, login, getMe, logout } from "../service/auth.api";
-import { setUser, setLoading, setError } from "../auth.slice";
+import { setUser, setLoading, setInitializing, setError } from "../auth.slice";
 
 export const useAuth = () => {
   const dispatch = useDispatch();
@@ -9,19 +8,10 @@ export const useAuth = () => {
   const registerUser = async (username, email, password) => {
     try {
       dispatch(setLoading(true));
-
       const res = await register(username, email, password);
-
       return res;
     } catch (error) {
-      dispatch(
-        setError(error.response?.data?.message || error.message)
-      );
-
-      console.error(
-        "Registration error:",
-        error.response?.data || error.message
-      );
+      dispatch(setError(error.response?.data?.message || error.message));
     } finally {
       dispatch(setLoading(false));
     }
@@ -30,23 +20,13 @@ export const useAuth = () => {
   const loginUser = async ({ email, password }) => {
     try {
       dispatch(setLoading(true));
-
       const res = await login(email, password);
-
       if (res.success) {
         dispatch(setUser(res.user));
       }
-
       return res;
     } catch (error) {
-      dispatch(
-        setError(error.response?.data?.message || error.message)
-      );
-
-      console.error(
-        "Login error:",
-        error.response?.data || error.message
-      );
+      dispatch(setError(error.response?.data?.message || error.message));
     } finally {
       dispatch(setLoading(false));
     }
@@ -54,48 +34,32 @@ export const useAuth = () => {
 
   const GetMe = async () => {
     try {
-      dispatch(setLoading(true));
+      // don't touch `loading` here — that's for button spinners
+      // `initializing` is specifically for the first auth check on page load
       const res = await getMe();
       if (res.success) {
         dispatch(setUser(res.user));
       }
       return res;
     } catch (error) {
-      dispatch(
-        setError(error.response?.data?.message || error.message)
-      );
-      console.error(
-        "Fetch current user(getme) error:",
-        error.response?.data || error.message
-      );
+      // silently fail — user just isn't logged in
+      dispatch(setUser(null));
     } finally {
-      dispatch(setLoading(false));
+      dispatch(setInitializing(false));  // auth check done, whatever the result
     }
   };
 
-  const logOut = async ()=>{
+  const logOut = async () => {
     try {
-        dispatch(setLoading(true))
-        await logout()
-        dispatch(setUser(null))
+      dispatch(setLoading(true));
+      await logout();
+      dispatch(setUser(null));
     } catch (error) {
-         dispatch(
-        setError(error.response?.data?.message || error.message)
-      );
-      console.error(
-        "logout error:",
-        error.response?.data || error.message
-      );
+      dispatch(setError(error.response?.data?.message || error.message));
     } finally {
       dispatch(setLoading(false));
     }
-    }
-
-
-  return {
-    registerUser,
-    loginUser,
-    GetMe,
-    logOut
   };
+
+  return { registerUser, loginUser, GetMe, logOut };
 };

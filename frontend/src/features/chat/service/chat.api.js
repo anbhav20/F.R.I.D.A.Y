@@ -1,12 +1,9 @@
-import axios from "axios";
+import {api} from "../../api"
 
-export const chatApi = axios.create({
-  baseURL: `${import.meta.env.VITE_SERVER_URI}/api/chats`,
-  withCredentials: true,
-});
+
 
 // ── API calls ──────────────────────────────────────────────────────────────
-export const fetchUserChats    = ()               => chatApi.get("/");
-export const fetchChatMessages = (chatId)         => chatApi.get(`/${chatId}/messages`);
-export const sendMessageApi    = (message, chatId) => chatApi.post("/message", { message, ...(chatId && { chat: chatId }) });
-export const deleteChatApi     = (chatId)         => chatApi.delete(`/${chatId}`);
+export const fetchUserChats    = ()               => api.get("/chats/");
+export const fetchChatMessages = (chatId)         => api.get(`/chats/${chatId}/messages`);
+export const sendMessageApi    = (message, chatId) => api.post("/chats/message", { message, ...(chatId && { chat: chatId }) });
+export const deleteChatApi     = (chatId)         => api.delete(`/chats/${chatId}`);

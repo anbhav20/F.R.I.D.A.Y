@@ -4,7 +4,11 @@ export const authenticate = async (req, res, next) => {
   const token = req.cookies.token;
 
   if (!token) {
-    return res.status(401).json({ message: "Unauthorized.", success: false });
+    return res.status(401).json({
+      message: "Access token missing.",
+      success: false,
+      code: "TOKEN_EXPIRED",
+    });
   }
 
   try {
@@ -12,14 +16,17 @@ export const authenticate = async (req, res, next) => {
     req.user = decoded;
     next();
   } catch (error) {
-    // Distinguish expired vs tampered — frontend needs to know when to refresh
     if (error.name === "TokenExpiredError") {
       return res.status(401).json({
         message: "Access token expired.",
         success: false,
-        code: "TOKEN_EXPIRED",  // frontend checks this to trigger refresh
+        code: "TOKEN_EXPIRED",
       });
     }
-    return res.status(401).json({ message: "Invalid token.", success: false });
+    return res.status(401).json({
+      message: "Invalid token.",
+      success: false,
+      code: "TOKEN_INVALID",
+    });
   }
 };

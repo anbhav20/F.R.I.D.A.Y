@@ -9,10 +9,22 @@ const app = express();
 
 app.use(helmet()); // Set security-related HTTP headers in one line
 
+const allowedOrigins = [
+  "http://localhost:5173",
+  process.env.CLIENT_URL,
+].filter(Boolean);
+
+console.log("Allowed CORS origins:", allowedOrigins.join(", "));
+
 app.use(cors({
-  origin: process.env.CLIENT_URL,
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    console.log("🚫 Blocked by CORS:", origin);
+    return callback(new Error("Not allowed by CORS"));
+  },
   credentials: true,
 }));
+
 
 app.use(express.json());
 app.use(cookieParser());

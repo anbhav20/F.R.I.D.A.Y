@@ -1,12 +1,11 @@
-import { MessageSquare, Trash2, X, Settings, LogOut, SquarePen } from "lucide-react";
+import { Trash2, X, LogOut, SquarePen } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../src/features/auth/hook/useAuth";
 
-// Group chats by recency
 const groupChats = (chats) => {
   const now = Date.now();
-  const DAY  = 86400000;
+  const DAY = 86400000;
   const groups = { Today: [], Yesterday: [], "Previous 7 Days": [], Older: [] };
   chats.forEach((c) => {
     const diff = now - new Date(c.updatedAt).getTime();
@@ -19,8 +18,8 @@ const groupChats = (chats) => {
 };
 
 export default function Sidebar({ isOpen, onClose, chats, activeChat, onNewChat, onSelectChat, onDeleteChat, user }) {
-  const { logOut }  = useAuth();
-  const navigate    = useNavigate();
+  const { logOut } = useAuth();
+  const navigate = useNavigate();
   const [hovered, setHovered] = useState(null);
 
   const grouped = groupChats(chats);
@@ -35,22 +34,22 @@ export default function Sidebar({ isOpen, onClose, chats, activeChat, onNewChat,
       {/* Mobile backdrop */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-20 lg:hidden"
+          className="fixed inset-0 bg-black/60 z-20 lg:hidden backdrop-blur-sm"
           onClick={onClose}
         />
       )}
 
       <aside
         className={`
-          fixed lg:relative top-0 left-0 h-full z-30 lg:z-auto
+          fixed lg:relative top-0 left-0 h-full h-[100dvh] z-30 lg:z-auto
           w-64 flex flex-col bg-[#171717]
           transition-transform duration-200 ease-in-out
           ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
         `}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-3 py-3">
-          <span className="text-sm font-semibold text-white">F.R.I.D.A.Y</span>
+        <div className="flex items-center justify-between px-3 py-3 shrink-0">
+          <span className="text-sm font-semibold text-white tracking-wide">F.R.I.D.A.Y</span>
           <div className="flex items-center gap-1">
             <button
               onClick={() => { onNewChat(); onClose(); }}
@@ -59,16 +58,17 @@ export default function Sidebar({ isOpen, onClose, chats, activeChat, onNewChat,
             >
               <SquarePen size={16} />
             </button>
-            <button onClick={onClose} className="lg:hidden p-2 rounded-lg hover:bg-white/10 text-zinc-400">
+            <button
+              onClick={onClose}
+              className="lg:hidden p-2 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white transition"
+            >
               <X size={16} />
             </button>
           </div>
         </div>
 
         {/* Chat list */}
-        <div className="flex-1 overflow-y-auto px-2 py-1 space-y-4
-          scrollbar-thin scrollbar-track-transparent scrollbar-thumb-zinc-700">
-
+        <div className="flex-1 overflow-y-auto px-2 py-1 space-y-4 sidebar-scroll">
           {Object.entries(grouped).map(([group, items]) =>
             items.length > 0 ? (
               <div key={group}>
@@ -112,11 +112,8 @@ export default function Sidebar({ isOpen, onClose, chats, activeChat, onNewChat,
         </div>
 
         {/* Footer */}
-        <div className="border-t border-white/5 p-2 space-y-0.5">
-          <button className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 text-xs transition">
-            <Settings size={14} />
-            Settings
-          </button>
+        <div className="border-t border-white/5 p-2 space-y-0.5 shrink-0">
+          
           <button
             onClick={handleLogout}
             className="flex items-center gap-2.5 w-full px-3 py-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 text-xs transition"
@@ -124,8 +121,6 @@ export default function Sidebar({ isOpen, onClose, chats, activeChat, onNewChat,
             <LogOut size={14} />
             Sign out
           </button>
-
-          {/* User */}
           <div className="flex items-center gap-2.5 px-3 py-2 mt-1 rounded-lg hover:bg-white/5 transition cursor-default">
             <div className="w-7 h-7 rounded-full bg-zinc-600 flex items-center justify-center text-white text-xs font-semibold shrink-0">
               {user?.username?.[0]?.toUpperCase() ?? "U"}

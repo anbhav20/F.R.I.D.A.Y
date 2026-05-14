@@ -12,11 +12,11 @@ import { sendEmail } from "../utils/nodemailer.js";
 const COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
-  sameSite: "strict",
+  sameSite: "lax",
 };
 
-const ACCESS_COOKIE  = { ...COOKIE_OPTIONS, maxAge: 15 * 60 * 1000 };           // 15 min
-const REFRESH_COOKIE = { ...COOKIE_OPTIONS, maxAge: 7 * 24 * 60 * 60 * 1000 };  // 7 days
+const ACCESS_COOKIE = { ...COOKIE_OPTIONS, maxAge: 7 * 24 * 60 * 60 * 1000 }; // 15 min
+const REFRESH_COOKIE = { ...COOKIE_OPTIONS, maxAge: 7 * 24 * 60 * 60 * 1000 }; // 7 days
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const buildVerifyUrl = (user) => {
@@ -39,7 +39,7 @@ const verificationEmailHtml = (username, verifyUrl) => `
 
 // Issues both tokens, saves refresh token to DB, sets both cookies
 const issueTokens = async (user, res) => {
-  const accessToken  = generateAccessToken(user);
+  const accessToken = generateAccessToken(user);
   const refreshToken = generateRefreshToken(user);
 
   // Store refresh token in DB — lets us invalidate it on logout
@@ -75,7 +75,7 @@ export const register = async (req, res) => {
     await sendEmail(
       user.email,
       "Verify your email — Welcome!",
-      verificationEmailHtml(user.username, verifyUrl)
+      verificationEmailHtml(user.username, verifyUrl),
     );
 
     return res.status(201).json({
@@ -84,7 +84,9 @@ export const register = async (req, res) => {
     });
   } catch (error) {
     console.error("[register]", error);
-    return res.status(500).json({ message: "Something went wrong.", success: false });
+    return res
+      .status(500)
+      .json({ message: "Something went wrong.", success: false });
   }
 };
 
@@ -92,10 +94,14 @@ export const register = async (req, res) => {
 export const login = async (req, res) => {
   const { email, password } = req.body;
   try {
-    const user = await User.findOne({ email: email.toLowerCase() }).select("+password +refreshToken");
+    const user = await User.findOne({ email: email.toLowerCase() }).select(
+      "+password +refreshToken",
+    );
 
     if (!user || !(await bcrypt.compare(password, user.password))) {
-      return res.status(401).json({ message: "Invalid email or password.", success: false });
+      return res
+        .status(401)
+        .json({ message: "Invalid email or password.", success: false });
     }
     if (!user.verified) {
       return res.status(403).json({
@@ -109,10 +115,18 @@ export const login = async (req, res) => {
     // Don't send password/refreshToken to client
     const { password: _, refreshToken: __, ...safeUser } = user.toObject();
 
-    return res.status(200).json({ message: "Logged in successfully.", success: true, user: safeUser });
+    return res
+      .status(200)
+      .json({
+        message: "Logged in successfully.",
+        success: true,
+        user: safeUser,
+      });
   } catch (error) {
     console.error("[login]", error);
-    return res.status(500).json({ message: "Something went wrong.", success: false });
+    return res
+      .status(500)
+      .json({ message: "Something went wrong.", success: false });
   }
 };
 
@@ -122,7 +136,9 @@ export const refreshToken = async (req, res) => {
   const token = req.cookies.refreshToken;
 
   if (!token) {
-    return res.status(401).json({ message: "No refresh token.", success: false });
+    return res
+      .status(401)
+      .json({ message: "No refresh token.", success: false });
   }
 
   try {
@@ -152,7 +168,9 @@ export const refreshToken = async (req, res) => {
         code: "REFRESH_EXPIRED",
       });
     }
-    return res.status(401).json({ message: "Invalid refresh token.", success: false });
+    return res
+      .status(401)
+      .json({ message: "Invalid refresh token.", success: false });
   }
 };
 
@@ -161,12 +179,18 @@ export const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
     if (!user) {
-      return res.status(404).json({ message: "User not found.", success: false });
+      return res
+        .status(404)
+        .json({ message: "User not found.", success: false });
     }
-    return res.status(200).json({ message: "User fetched.", success: true, user });
+    return res
+      .status(200)
+      .json({ message: "User fetched.", success: true, user });
   } catch (error) {
     console.error("[getMe]", error);
-    return res.status(500).json({ message: "Something went wrong.", success: false });
+    return res
+      .status(500)
+      .json({ message: "Something went wrong.", success: false });
   }
 };
 
@@ -195,38 +219,40 @@ export const logout = async (req, res) => {
 // ─── Verify Email ─────────────────────────────────────────────────────────────
 export const verifyEmail = async (req, res) => {
   const { token } = req.query;
- 
+
   if (!token) {
     // No token → just send to login, can't do much
     return res.redirect(`${process.env.CLIENT_URL}/login`);
   }
- 
+
   try {
-    const decoded = jwt.verify(token, process.env.EMAIL_SECRET ?? process.env.JWT_SECRET);
+    const decoded = jwt.verify(
+      token,
+      process.env.EMAIL_SECRET ?? process.env.JWT_SECRET,
+    );
     const user = await User.findOne({ email: decoded.email });
- 
+
     if (!user) {
       // Invalid token but don't crash — send to login
       return res.redirect(`${process.env.CLIENT_URL}/login`);
     }
- 
+
     if (!user.verified) {
       user.verified = true;
       await user.save();
     }
- 
+
     // Always issue tokens and redirect to /chat — whether first verify or re-click
     await issueTokens(user, res);
     return res.redirect(`${process.env.CLIENT_URL}/chat`);
- 
   } catch (error) {
     console.error("[verifyEmail]", error);
- 
+
     if (error.name === "TokenExpiredError") {
       // Token expired → send to login with a query param so frontend can show message
       return res.redirect(`${process.env.CLIENT_URL}/login?verify=expired`);
     }
- 
+
     return res.redirect(`${process.env.CLIENT_URL}/login?verify=invalid`);
   }
 };
@@ -235,27 +261,37 @@ export const verifyEmail = async (req, res) => {
 export const resendVerification = async (req, res) => {
   const { email } = req.body;
   if (!email) {
-    return res.status(400).json({ message: "Email is required.", success: false });
+    return res
+      .status(400)
+      .json({ message: "Email is required.", success: false });
   }
 
   try {
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user || user.verified) {
       return res.status(200).json({
-        message: "If that email exists and is unverified, a new link has been sent.",
+        message:
+          "If that email exists and is unverified, a new link has been sent.",
         success: true,
       });
     }
 
     const verifyUrl = buildVerifyUrl(user);
-    await sendEmail(user.email, "Resend: Verify your email", verificationEmailHtml(user.username, verifyUrl));
+    await sendEmail(
+      user.email,
+      "Resend: Verify your email",
+      verificationEmailHtml(user.username, verifyUrl),
+    );
 
     return res.status(200).json({
-      message: "If that email exists and is unverified, a new link has been sent.",
+      message:
+        "If that email exists and is unverified, a new link has been sent.",
       success: true,
     });
   } catch (error) {
     console.error("[resendVerification]", error);
-    return res.status(500).json({ message: "Something went wrong.", success: false });
+    return res
+      .status(500)
+      .json({ message: "Something went wrong.", success: false });
   }
 };

@@ -5,18 +5,7 @@ import { useSelector } from "react-redux";
 
 import { useAuth } from "../hook/useAuth";
 import AuthMessage from "../../../../components/AuthMessage";
-import Divider from "../../../../components/Divider";
-import Card from "../../../../components/Card";
 import Logo from "../../../../components/Logo";
-
-const GoogleIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 01-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
-    <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z" fill="#34A853"/>
-    <path d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
-    <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
-  </svg>
-);
 
 export default function Signup() {
   const [email, setEmail] = useState("");
@@ -28,15 +17,11 @@ export default function Signup() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-     const username = email
-    .split("@")[0]
-    .toLowerCase();
+    const username = email.split("@")[0].toLowerCase();
     const res = await registerUser(username, email, password);
     if (res?.success) {
       setEmail("");
       setPassword("");
-    
     }
   };
 
@@ -53,48 +38,27 @@ export default function Signup() {
   };
 
   return (
-    <div className="min-h-screen mesh-bg flex items-center justify-center px-4 py-6">
-      {/* Background Glow */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-24 -left-16 w-56 h-56 bg-orange-500/20 blur-3xl rounded-full" />
-        <div className="absolute -bottom-24 -right-16 w-56 h-56 bg-amber-300/10 blur-3xl rounded-full" />
-      </div>
-
-      <div className="relative z-10 w-full max-w-sm">
-        {/* Logo */}
-        
+    <div className="min-h-screen bg-[#212121] flex items-center justify-center px-4 py-6">
+      <div className="w-full max-w-sm">
         <Logo
           size="md"
           title="Create account"
-          subtitle="Start using F.R.I.D.A.Y "
+          subtitle="Start using F.R.I.D.A.Y"
         />
 
-        <Card>
-          {/* AuthMessage outside form */}
+        <div className="bg-[#2a2a2a] border border-white/[0.08] rounded-2xl p-7">
           <AuthMessage />
 
-          {/* Google Signup */}
-          <button
-            type="button"
-            className="w-full h-10 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 active:scale-[0.98] transition-all flex items-center justify-center gap-2 text-xs font-medium text-white"
-          >
-            <GoogleIcon />
-            Continue with Google
-          </button>
-
-          <Divider />
-
-          {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-3" noValidate>
             {/* Email */}
             <div>
-              <label className="text-xs text-zinc-400 mb-1.5 block">
+              <label className="text-xs text-zinc-500 mb-1.5 block">
                 Email Address
               </label>
               <div className="relative">
                 <Mail
                   size={13}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 pointer-events-none"
                 />
                 <input
                   type="email"
@@ -103,20 +67,20 @@ export default function Signup() {
                   placeholder="you@example.com"
                   autoComplete="email"
                   required
-                  className="input-field text-sm pl-9 h-7"
+                  className="w-full bg-zinc-800 border border-white/10 rounded-xl text-sm text-white placeholder:text-zinc-600 pl-9 pr-3 py-2 outline-none focus:border-white/20 transition-colors"
                 />
               </div>
             </div>
 
             {/* Password */}
             <div>
-              <label className="text-xs text-zinc-400 mb-1.5 block">
+              <label className="text-xs text-zinc-500 mb-1.5 block">
                 Password
               </label>
               <div className="relative">
                 <Lock
                   size={13}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-600 pointer-events-none"
                 />
                 <input
                   type={showPassword ? "text" : "password"}
@@ -125,12 +89,12 @@ export default function Signup() {
                   placeholder="Create a strong password"
                   autoComplete="new-password"
                   required
-                  className="input-field text-sm pl-9 pr-9 h-5"
+                  className="w-full bg-zinc-800 border border-white/10 rounded-xl text-sm text-white placeholder:text-zinc-600 pl-9 pr-9 py-2 outline-none focus:border-white/20 transition-colors"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? <EyeOff size={13} /> : <Eye size={13} />}
@@ -160,11 +124,11 @@ export default function Signup() {
             <button
               type="submit"
               disabled={loading}
-              className="btn-primary w-full h-9 text-sm font-semibold text-white shadow-md shadow-orange-500/20 disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.98] transition-all mt-4!"
+              className="w-full bg-white text-black rounded-xl py-2.5 text-sm font-medium hover:bg-zinc-200 active:scale-[0.98] transition-all mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-3.5 w-3.5 text-white" viewBox="0 0 24 24" fill="none">
+                  <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                   </svg>
@@ -176,17 +140,16 @@ export default function Signup() {
             </button>
           </form>
 
-          {/* Bottom */}
-          <p className="text-center text-xs text-zinc-500 mt-4">
+          <p className="text-center text-xs text-zinc-600 mt-5">
             Already have an account?{" "}
             <Link
               to="/login"
-              className="text-orange-400 hover:text-orange-300 font-medium transition-colors"
+              className="text-zinc-400 hover:text-zinc-300 font-medium transition-colors"
             >
               Sign in
             </Link>
           </p>
-        </Card>
+        </div>
       </div>
     </div>
   );
