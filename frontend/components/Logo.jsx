@@ -1,5 +1,3 @@
-import { Sparkles } from "lucide-react";
-
 function Logo({
   size = "md",
   title = "Create account",
@@ -8,19 +6,16 @@ function Logo({
   const sizes = {
     sm: {
       box: "w-6 h-6",
-      icon: 14,
       title: "text-base",
     },
 
     md: {
       box: "w-10 h-10",
-      icon: 18,
       title: "text-xl",
     },
 
     lg: {
       box: "w-14 h-14",
-      icon: 22,
       title: "text-2xl",
     },
   };
@@ -33,15 +28,16 @@ function Logo({
         className={`
           ${s.box}
           rounded-xl
-          bg-gradient-to-br
-          from-orange-500
-          to-amber-400
-          flex items-center justify-center
+          overflow-hidden
           mx-auto mb-3
-          shadow-lg shadow-orange-500/30
+          shadow-lg 
         `}
       >
-        <Sparkles size={s.icon} className="text-white" />
+        <img
+          src="../public/favicon/favicon-96x96.png"
+          alt="F.R.I.D.A.Y AI Logo"
+          className="w-full h-full object-cover"
+        />
       </div>
 
       <h1 className={`${s.title} font-bold tracking-tight text-white`}>

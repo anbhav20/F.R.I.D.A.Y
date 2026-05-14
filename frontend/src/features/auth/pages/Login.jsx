@@ -33,7 +33,7 @@ export default function Login() {
           subtitle="Login to continue"
         />
 
-        <div className="bg-[#2a2a2a] border border-white/[0.08] rounded-2xl p-7">
+        <div className="bg-[#2a2a2a] border border-white/8 rounded-2xl p-7">
           <AuthMessage />
 
           <form onSubmit={handleSubmit} className="space-y-3" noValidate>
