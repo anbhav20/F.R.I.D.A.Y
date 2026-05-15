@@ -21,7 +21,7 @@ const dispatch = useDispatch();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email.trim()) return dispatch(setError("Please enter your email."));
+    if (!email.trim()||!email.includes("@")) return dispatch(setError("Please enter your email."));
     if (!password.trim()) return dispatch(setError("Please enter a password."));
     if (password.length < 6)
       return dispatch(setError("Password must be at least 6 characters."));

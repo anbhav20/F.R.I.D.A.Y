@@ -3,7 +3,7 @@ import { store } from "../app/app.store";
 import { setError, setMessage, clearUser } from "./auth/auth.slice";
 
 export const api = axios.create({
-  baseURL: `${import.meta.env.VITE_SERVER_URI}/api`,
+  baseURL: `${import.meta.env.VITE_API_URL}/api`,
   withCredentials: true,
 });
 

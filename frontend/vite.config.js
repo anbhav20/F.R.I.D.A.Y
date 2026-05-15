@@ -9,6 +9,15 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      workbox: {
+        navigateFallback: 'index.html',
+        runtimeCaching: [
+          {
+            urlPattern: /\/api\/.*/,
+            handler: 'NetworkOnly',
+          }
+        ]
+      },
       manifest: {
         name: 'F.R.I.D.A.Y',
         short_name: 'FRIDAY',
