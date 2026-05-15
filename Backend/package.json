@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "@langchain/core": "0.3.66",
+    "@langchain/core": "^0.3.58",
     "@langchain/google-genai": "0.2.12",
     "@langchain/groq": "^0.1.2",
     "@langchain/mistralai": "0.2.2",
