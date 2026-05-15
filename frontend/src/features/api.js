@@ -30,6 +30,7 @@ api.interceptors.response.use(
     const status        = error.response?.status;
     const isRefreshCall = original.url?.includes("/refresh");
     const isMeCall      = original.url?.includes("/me");
+    const isLoginCall   = original.url?.includes("/login");
 
     // ── Refresh call itself failed → force logout ─────────────────────────────
     if (isRefreshCall && status === 401) {
@@ -40,14 +41,20 @@ api.interceptors.response.use(
     }
 
     // ── /me failed → not logged in, just reject silently ─────────────────────
-    // GetMe() handles this in its catch block by setting user to null
-    // Don't redirect or attempt refresh — let initializing flip to false cleanly
     if (isMeCall && status === 401) {
       return Promise.reject(error);
     }
 
-    // ── Any other 401 on a non-refresh endpoint → attempt refresh ────────────
-    if (status === 401 && !original._retry && !isRefreshCall) {
+    // ── Login failed → show error directly, no refresh attempt ───────────────
+    if (isLoginCall && status === 401) {
+      const message = error.response?.data?.message || "Invalid email or password";
+      store.dispatch(setError(message));
+      store.dispatch(setMessage(null));
+      return Promise.reject(error);
+    }
+
+    // ── Any other 401 → attempt refresh ──────────────────────────────────────
+    if (status === 401 && !original._retry && !isRefreshCall && !isLoginCall) {
       original._retry = true;
 
       if (isRefreshing) {
