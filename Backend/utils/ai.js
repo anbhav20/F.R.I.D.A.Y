@@ -101,7 +101,7 @@ const classifyQuery = async (userMessage) => {
 const Provider = { GEMINI: "gemini", MISTRAL: "mistral", GROQ: "groq" };
 
 // Tool path: Gemini → Mistral → Groq
-const TOOL_PROVIDER_ORDER = [Provider.GEMINI, Provider.MISTRAL, Provider.GROQ];
+const TOOL_PROVIDER_ORDER = [Provider.GROQ, Provider.MISTRAL, Provider.GEMINI];
 // No-tool path: Groq → Mistral → Gemini  (fast first, expensive last)
 const FAST_PROVIDER_ORDER = [Provider.GROQ, Provider.MISTRAL, Provider.GEMINI];
 
