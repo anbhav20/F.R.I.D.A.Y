@@ -72,11 +72,11 @@ export const register = async (req, res) => {
     });
 
     const verifyUrl = buildVerifyUrl(user);
-    await sendEmail(
+     sendEmail(
       user.email,
       "Verify your email — Welcome!",
       verificationEmailHtml(user.username, verifyUrl),
-    );
+    ).catch((err)=>console.error("register, email failed", err))
 
     return res.status(201).json({
       message: "Account created! Please check your email to verify.",
