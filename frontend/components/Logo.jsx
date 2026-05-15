@@ -34,7 +34,7 @@ function Logo({
         `}
       >
         <img
-          src="../public/favicon/favicon-96x96.png"
+          src="/favicon/favicon-96x96.png"
           alt="F.R.I.D.A.Y AI Logo"
           className="w-full h-full object-cover"
         />
