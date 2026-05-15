@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { useSelector } from "react-redux";
+import { useDispatch } from "react-redux";
+import { setError } from "../auth.slice"
 
 import { useAuth } from "../hook/useAuth";
 import AuthMessage from "../../../../components/AuthMessage";
@@ -12,26 +14,24 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
+const dispatch = useDispatch();
   const navigate = useNavigate();
   const { loginUser } = useAuth();
   const { loading } = useSelector((state) => state.auth);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!email.trim()) return dispatch(setError("Please enter your email."));
+    if (!password.trim())
+      return dispatch(setError("Please enter your password."));
     const res = await loginUser({ email, password });
-    if (res?.success) {
-      navigate("/");
-    }
+    if (res?.success) navigate("/");
   };
 
   return (
     <div className="min-h-screen bg-[#212121] flex items-center justify-center px-4 py-6">
       <div className="w-full max-w-sm">
-        <Logo
-          size="md"
-          title="Welcome back"
-          subtitle="Login to continue"
-        />
+        <Logo size="md" title="Welcome back" subtitle="Login to continue" />
 
         <div className="bg-[#2a2a2a] border border-white/8 rounded-2xl p-7">
           <AuthMessage />
@@ -103,9 +103,24 @@ export default function Login() {
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  <svg
+                    className="animate-spin h-3.5 w-3.5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v8z"
+                    />
                   </svg>
                   Signing in...
                 </span>

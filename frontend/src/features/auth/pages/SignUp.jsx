@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import { useSelector } from "react-redux";
+import { useDispatch } from "react-redux";
+import { setError } from "../auth.slice"
 
 import { useAuth } from "../hook/useAuth";
 import AuthMessage from "../../../../components/AuthMessage";
@@ -12,11 +14,17 @@ export default function Signup() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
+  
+const dispatch = useDispatch();
   const { registerUser } = useAuth();
   const { loading } = useSelector((state) => state.auth);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!email.trim()) return dispatch(setError("Please enter your email."));
+    if (!password.trim()) return dispatch(setError("Please enter a password."));
+    if (password.length < 6)
+      return dispatch(setError("Password must be at least 6 characters."));
     const username = email.split("@")[0].toLowerCase();
     const res = await registerUser(username, email, password);
     if (res?.success) {
@@ -26,14 +34,17 @@ export default function Signup() {
   };
 
   const passwordStrength =
-    password.length === 0 ? null
-    : password.length < 6 ? "weak"
-    : password.length < 10 ? "fair"
-    : "strong";
+    password.length === 0
+      ? null
+      : password.length < 6
+        ? "weak"
+        : password.length < 10
+          ? "fair"
+          : "strong";
 
   const strengthConfig = {
-    weak:   { label: "Weak",   color: "#ef4444", width: "33%"  },
-    fair:   { label: "Fair",   color: "#f59e0b", width: "66%"  },
+    weak: { label: "Weak", color: "#ef4444", width: "33%" },
+    fair: { label: "Fair", color: "#f59e0b", width: "66%" },
     strong: { label: "Strong", color: "#22c55e", width: "100%" },
   };
 
@@ -113,7 +124,10 @@ export default function Signup() {
                       }}
                     />
                   </div>
-                  <p className="text-xs mt-1" style={{ color: strengthConfig[passwordStrength].color }}>
+                  <p
+                    className="text-xs mt-1"
+                    style={{ color: strengthConfig[passwordStrength].color }}
+                  >
                     {strengthConfig[passwordStrength].label} password
                   </p>
                 </div>
@@ -128,9 +142,24 @@ export default function Signup() {
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  <svg
+                    className="animate-spin h-3.5 w-3.5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v8z"
+                    />
                   </svg>
                   Creating account...
                 </span>
