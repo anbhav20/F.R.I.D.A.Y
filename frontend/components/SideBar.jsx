@@ -41,7 +41,7 @@ export default function Sidebar({ isOpen, onClose, chats, activeChat, onNewChat,
 
       <aside
         className={`
-          fixed lg:relative top-0 left-0 h-full h-[100dvh] z-30 lg:z-auto
+          fixed lg:relative top-0 left-0 h-dvh z-30 lg:z-auto
           w-64 flex flex-col bg-[#171717]
           transition-transform duration-200 ease-in-out
           ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}

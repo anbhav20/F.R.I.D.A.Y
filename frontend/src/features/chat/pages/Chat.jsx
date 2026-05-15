@@ -88,7 +88,6 @@ export default function Chat() {
     activeChat,
     messages,
     loading,
-    chatsLoading,
     msgsLoading,
     isTyping,
     loadChats,

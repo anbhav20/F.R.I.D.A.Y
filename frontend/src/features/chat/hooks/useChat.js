@@ -6,9 +6,9 @@ import {
 } from "../service/chat.api";
 import {
   setChats, setActiveChat, setMessages, appendMessage,
-  upsertChat, removeChat, updateChatTitle,
+  upsertChat, removeChat,
   setLoading, setChatsLoading, setMsgsLoading,
-  setIsTyping, setChatError, clearChat,
+  setIsTyping, clearChat,
 } from "../chat.slice";
 
 export const useChat = () => {
@@ -21,9 +21,9 @@ export const useChat = () => {
     dispatch(setChatsLoading(true));
     try {
       const { data } = await fetchUserChats();
-      dispatch(setChats(data.chats));
+      dispatch(setChats(data.chats ?? []));
     } catch {
-      // error handled by interceptor
+      dispatch(setChats([]));
     } finally {
       dispatch(setChatsLoading(false));
     }
@@ -35,7 +35,7 @@ export const useChat = () => {
     dispatch(setMsgsLoading(true));
     try {
       const { data } = await fetchChatMessages(chat._id);
-      dispatch(setMessages(data.messages));
+      dispatch(setMessages(data.messages ?? []));
     } catch {
       dispatch(setMessages([]));
     } finally {
@@ -54,7 +54,6 @@ export const useChat = () => {
 
     const chatId = activeChat?._id ?? null;
 
-    // Optimistically add user message to UI
     dispatch(appendMessage({ role: "user", content, _id: `tmp-${Date.now()}` }));
     dispatch(setLoading(true));
     dispatch(setIsTyping(true));
@@ -62,13 +61,11 @@ export const useChat = () => {
     try {
       const { data } = await sendMessageApi(content, chatId);
 
-      // If new chat was created, add it to sidebar and set as active
       if (!chatId && data.chat) {
         dispatch(upsertChat(data.chat));
         dispatch(setActiveChat(data.chat));
       }
 
-      // Add AI response
       dispatch(appendMessage({
         role: "ai",
         content: data.aiMessage,
