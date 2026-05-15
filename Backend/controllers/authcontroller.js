@@ -72,7 +72,7 @@ export const register = async (req, res) => {
     });
 
     const verifyUrl = buildVerifyUrl(user);
-     sendEmail(
+     await sendEmail(
       user.email,
       "Verify your email — Welcome!",
       verificationEmailHtml(user.username, verifyUrl),
