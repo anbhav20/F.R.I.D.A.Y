@@ -3,10 +3,11 @@ import { Mail } from "lucide-react";
 import AuthMessage from "../../../../components/AuthMessage";
 
 export default function VerifyEmail() {
+
   useEffect(() => {
     const token = new URLSearchParams(window.location.search).get("token");
-    if (!token) return;
-    window.location.href = `${import.meta.env.VITE_SERVER_URI}/api/auth/verify-email?token=${token}`;
+    if (!token) return
+    window.location.href = `${import.meta.env.VITE_API_URL}/api/auth/verify-email?token=${token}`;
   }, []);
 
   return (

@@ -15,7 +15,7 @@ const COOKIE_OPTIONS = {
   sameSite: "lax",
 };
 
-const ACCESS_COOKIE = { ...COOKIE_OPTIONS, maxAge: 7 * 24 * 60 * 60 * 1000 }; // 15 min
+const ACCESS_COOKIE = { ...COOKIE_OPTIONS, maxAge: 7 * 24 * 60 * 60 * 1000 }; 
 const REFRESH_COOKIE = { ...COOKIE_OPTIONS, maxAge: 7 * 24 * 60 * 60 * 1000 }; // 7 days
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
