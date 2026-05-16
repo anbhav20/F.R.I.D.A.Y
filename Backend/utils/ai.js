@@ -41,8 +41,7 @@ DO NOT SEARCH for:
 - Never fabricate facts — if unsure, search or say so`;
 
 // ══════════════════════════════════════════════════════════════════════════════
-// QUERY CLASSIFIER  (runs on Groq — ultra fast, no tools needed)
-// Returns: { needsTools: boolean, reason: string }
+// QUERY CLASSIFIER
 // ══════════════════════════════════════════════════════════════════════════════
 const CLASSIFIER_PROMPT = `You are a query classifier. Decide if a user query needs real-time internet search or external tools.
 
@@ -71,7 +70,7 @@ let classifierModel = null;
 const getClassifier = () => {
   if (!classifierModel) {
     classifierModel = new ChatGroq({
-      model: "llama-3.1-8b-instant", // smallest + fastest Groq model
+      model: "llama-3.1-8b-instant", // smallest + fastest for classification only
       apiKey: process.env.GROQ_API_KEY,
       temperature: 0,
       maxTokens: 64,
@@ -98,13 +97,11 @@ const classifyQuery = async (userMessage) => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
-// PROVIDER STATE — separate pools for tool & no-tool paths
+// PROVIDER STATE
 // ══════════════════════════════════════════════════════════════════════════════
 const Provider = { GEMINI: "gemini", MISTRAL: "mistral", GROQ: "groq" };
 
-// Tool path: Gemini → Mistral → Groq
 const TOOL_PROVIDER_ORDER = [Provider.MISTRAL, Provider.GROQ, Provider.GEMINI];
-// No-tool path: Groq → Mistral → Gemini  (fast first, expensive last)
 const FAST_PROVIDER_ORDER = [Provider.GROQ, Provider.MISTRAL, Provider.GEMINI];
 
 const RETRY_AFTER_MINUTES = 2;
@@ -151,17 +148,17 @@ const makeMistral = () =>
     maxTokens: 2048,
   });
 
-const makeGroq = (large = false) =>
+// Always 70b — 8b was too weak for system prompt following & Hindi/Hinglish
+const makeGroq = () =>
   new ChatGroq({
-    model: large ? "llama-3.3-70b-versatile" : "llama-3.1-8b-instant",
+    model: "llama-3.3-70b-versatile",
     apiKey: process.env.GROQ_API_KEY,
     temperature: 0.7,
     maxTokens: 2048,
   });
 
-const makeModel = (provider, withTools) => {
-  // For no-tool fast path, use smaller Groq model
-  if (provider === Provider.GROQ) return makeGroq(!withTools === false);
+const makeModel = (provider) => {
+  if (provider === Provider.GROQ) return makeGroq();
   if (provider === Provider.GEMINI) return makeGemini();
   if (provider === Provider.MISTRAL) return makeMistral();
 };
@@ -253,8 +250,12 @@ const searchWithSerper = async (query) => {
 const smartSearch = async (query) => {
   const order = isSearchExhausted(searchState.current)
     ? [SearchProvider.TAVILY, SearchProvider.SERPER].filter((sp) => !isSearchExhausted(sp))
-    : [searchState.current, searchState.current === SearchProvider.TAVILY
-        ? SearchProvider.SERPER : SearchProvider.TAVILY];
+    : [
+        searchState.current,
+        searchState.current === SearchProvider.TAVILY
+          ? SearchProvider.SERPER
+          : SearchProvider.TAVILY,
+      ];
 
   for (const sp of order) {
     try {
@@ -283,7 +284,6 @@ const webSearchTool = tool(
     schema: z.object({ query: z.string().describe("Search query in English") }),
   }
 );
-
 
 const getWeatherTool = tool(
   async ({ location }) => {
@@ -344,7 +344,7 @@ const TOOLS = [webSearchTool, getWeatherTool, calculateTool, getDatetimeTool];
 const TOOL_MAP = Object.fromEntries(TOOLS.map((t) => [t.name, t]));
 
 // ══════════════════════════════════════════════════════════════════════════════
-// AGENTIC LOOP  (for tool-enabled paths)
+// AGENTIC LOOP
 // ══════════════════════════════════════════════════════════════════════════════
 const runAgenticLoop = async (lcMessages, modelWithTools) => {
   let response = await modelWithTools.invoke(lcMessages);
@@ -369,10 +369,9 @@ const runAgenticLoop = async (lcMessages, modelWithTools) => {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // GROQ TOOL-CALL FALLBACK
-// Groq tool calling unreliable in Hindi/Hinglish — manual search inject
 // ══════════════════════════════════════════════════════════════════════════════
 const runGroqToolPath = async (lcMessages) => {
-  const model = makeGroq(true); // 70b for tool path
+  const model = makeGroq();
   try {
     return await runAgenticLoop([...lcMessages], model.bindTools(TOOLS));
   } catch (err) {
@@ -430,20 +429,18 @@ const tryProvider = async (provider, lcMessages, withTools) => {
   console.log(`[AI] Trying ${provider} | tools=${withTools}`);
 
   if (!withTools) {
-    // FAST PATH — no tools, just invoke directly
-    const model = makeModel(provider, false);
+    const model = makeModel(provider);
     const response = await model.invoke(lcMessages);
     return response.content?.trim() || "I couldn't generate a response.";
   }
 
-  // TOOL PATH
   if (provider === Provider.GROQ) return await runGroqToolPath(lcMessages);
-  const model = makeModel(provider, true);
+  const model = makeModel(provider);
   return await runAgenticLoop([...lcMessages], model.bindTools(TOOLS));
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
-// MAIN: generateResponse  — Intelligent router entry point
+// MAIN: generateResponse
 // ══════════════════════════════════════════════════════════════════════════════
 export const generateResponse = async (messages) => {
   const lcMessages = [
@@ -451,41 +448,29 @@ export const generateResponse = async (messages) => {
     ...messages.map(toMessage).filter(Boolean),
   ];
 
-  // Extract last user message for classification
   const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
   const userText = lastUserMsg?.content || "";
 
-  // ── Step 1: classify query ─────────────────────────────────────────────────
   const { needsTools } = await classifyQuery(userText);
-
-  // ── Step 2: pick provider order based on classification ────────────────────
   const order = needsTools ? TOOL_PROVIDER_ORDER : FAST_PROVIDER_ORDER;
 
-  // ── Step 3: try providers with auto-fallback ───────────────────────────────
   for (const p of order) {
     if (isExhausted(p)) continue;
     try {
-      const result = await tryProvider(p, lcMessages, needsTools);
-      return result;
+      return await tryProvider(p, lcMessages, needsTools);
     } catch (err) {
       console.error(`[AI] ${p} error: ${err?.message}`);
-      if (shouldFallback(err)) {
-        markExhausted(p);
-      } else {
-        // Unexpected error — still mark exhausted to skip on retry
-        markExhausted(p);
-      }
+      markExhausted(p);
     }
   }
 
-  // ── Step 4: last resort — try opposite path ────────────────────────────────
-  // e.g. if tool providers all failed, try fast providers without tools
+  // Last resort — try opposite path without tools
   const fallbackOrder = needsTools ? FAST_PROVIDER_ORDER : TOOL_PROVIDER_ORDER;
   console.warn("[AI] Primary order exhausted — trying fallback path.");
   for (const p of fallbackOrder) {
     if (isExhausted(p)) continue;
     try {
-      return await tryProvider(p, lcMessages, false); // no tools in last resort
+      return await tryProvider(p, lcMessages, false);
     } catch (err) {
       markExhausted(p);
     }
@@ -495,7 +480,7 @@ export const generateResponse = async (messages) => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
-// GENERATE CHAT TITLE — fastest available
+// GENERATE CHAT TITLE
 // ══════════════════════════════════════════════════════════════════════════════
 export const generateChatTitle = async (message) => {
   const titlePrompt = [
@@ -505,11 +490,11 @@ export const generateChatTitle = async (message) => {
     new HumanMessage(`Title for: "${message}"`),
   ];
 
-  // Groq first (fastest), then Mistral, then Gemini
-  for (const makeModelFn of [() => makeGroq(false), makeMistral, makeGemini]) {
-    if (makeModelFn === (() => makeGroq(false)) && isExhausted(Provider.GROQ)) continue;
-    if (makeModelFn === makeMistral && isExhausted(Provider.MISTRAL)) continue;
-    if (makeModelFn === makeGemini && isExhausted(Provider.GEMINI)) continue;
+  for (const makeModelFn of [makeGroq, makeMistral, makeGemini]) {
+    const provider =
+      makeModelFn === makeGroq ? Provider.GROQ :
+      makeModelFn === makeMistral ? Provider.MISTRAL : Provider.GEMINI;
+    if (isExhausted(provider)) continue;
     try {
       const model = makeModelFn();
       const res = await model.invoke(titlePrompt);
