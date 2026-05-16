@@ -1,32 +1,37 @@
 import { useDispatch } from "react-redux";
-import { register, login, getMe, logout } from "../service/auth.api";
+import { oauthLogin, getMe, logout } from "../service/auth.api";
+import { signInWithPopup } from "firebase/auth";
+import { auth, googleProvider, githubProvider } from "../../../config/firebase";
 import { setUser, setLoading, setInitializing, setError } from "../auth.slice";
 
 export const useAuth = () => {
   const dispatch = useDispatch();
 
-  const registerUser = async (username, email, password) => {
+  const loginWithGoogle = async () => {
     try {
       dispatch(setLoading(true));
-      const res = await register(username, email, password);
+      const result = await signInWithPopup(auth, googleProvider);
+      const idToken = await result.user.getIdToken();
+      const res = await oauthLogin(idToken);
+      if (res.success) dispatch(setUser(res.user));
       return res;
     } catch (error) {
-      dispatch(setError(error.response?.data?.message || error.message));
+      dispatch(setError(error.response?.data?.message || "Google login failed."));
     } finally {
       dispatch(setLoading(false));
     }
   };
 
-  const loginUser = async ({ email, password }) => {
+  const loginWithGithub = async () => {
     try {
       dispatch(setLoading(true));
-      const res = await login(email, password);
-      if (res.success) {
-        dispatch(setUser(res.user));
-      }
+      const result = await signInWithPopup(auth, githubProvider);
+      const idToken = await result.user.getIdToken();
+      const res = await oauthLogin(idToken);
+      if (res.success) dispatch(setUser(res.user));
       return res;
     } catch (error) {
-      dispatch(setError(error.response?.data?.message || error.message));
+      dispatch(setError(error.response?.data?.message || "GitHub login failed."));
     } finally {
       dispatch(setLoading(false));
     }
@@ -34,18 +39,13 @@ export const useAuth = () => {
 
   const GetMe = async () => {
     try {
-      // don't touch `loading` here — that's for button spinners
-      // `initializing` is specifically for the first auth check on page load
       const res = await getMe();
-      if (res.success) {
-        dispatch(setUser(res.user));
-      }
+      if (res.success) dispatch(setUser(res.user));
       return res;
-    } catch (error) {
-      // silently fail — user just isn't logged in
+    } catch {
       dispatch(setUser(null));
     } finally {
-      dispatch(setInitializing(false));  // auth check done, whatever the result
+      dispatch(setInitializing(false));
     }
   };
 
@@ -61,5 +61,5 @@ export const useAuth = () => {
     }
   };
 
-  return { registerUser, loginUser, GetMe, logOut };
+  return { loginWithGoogle, loginWithGithub, GetMe, logOut };
 };

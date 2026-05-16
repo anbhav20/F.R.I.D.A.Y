@@ -7,7 +7,7 @@ const UserSchema = new mongoose.Schema(
       default: "",
       trim: true,
       minlength: 3,
-      maxlength: 20,
+      maxlength: 50,
     },
     email: {
       type: String,
@@ -17,18 +17,12 @@ const UserSchema = new mongoose.Schema(
       trim: true,
       match: [/^\S+@\S+\.\S+$/, "Invalid email format"],
     },
-    password: {
-      type: String,
-      required: true,
-      minlength: 3,
-      maxlength: 60,
-      select: false,
-    },
-    avatar:   { type: String,  default: "" },
-    verified: { type: Boolean, default: false },
-
-    // ── Refresh token stored in DB so we can invalidate it on logout ──────────
-    refreshToken: { type: String, default: null, select: false },
+    // password removed — OAuth only
+    avatar:      { type: String,  default: "" },
+    verified:    { type: Boolean, default: true },
+    firebaseUid: { type: String,  default: null },
+    provider:    { type: String,  default: null }, // "google.com" / "github.com"
+    refreshToken:{ type: String,  default: null, select: false },
   },
   { timestamps: true }
 );

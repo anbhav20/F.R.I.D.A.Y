@@ -1,11 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { useEffect } from "react";
-
 import Chat from "../features/chat/pages/Chat";
 import Login from "../features/auth/pages/Login";
-import SignUp from "../features/auth/pages/SignUp";
-import VerifyEmail from "../features/auth/pages/VerifyEmail";
 import { useAuth } from "../features/auth/hook/useAuth";
 import InstallBanner from "../../components/InstallBanner";
 import NotFound from "../../components/NotFound";
@@ -56,8 +53,6 @@ export default function App() {
         <Route path="*" element={<NotFound />} />
         <Route path="/" element={<Navigate to="/login" />} />
         <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-        <Route path="/signup" element={<PublicRoute><SignUp /></PublicRoute>} />
-        <Route path="/verify-email" element={<PublicRoute><VerifyEmail /></PublicRoute>} />
         <Route path="/chat" element={<PrivateRoute><Chat /></PrivateRoute>} />
       </Routes>
     </BrowserRouter>

@@ -4,7 +4,6 @@ import { ChatGroq } from "@langchain/groq";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { ChatMistralAI } from "@langchain/mistralai";
 import { z } from "zod";
-import nodemailer from "nodemailer";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SYSTEM PROMPT
@@ -104,7 +103,7 @@ const classifyQuery = async (userMessage) => {
 const Provider = { GEMINI: "gemini", MISTRAL: "mistral", GROQ: "groq" };
 
 // Tool path: Gemini → Mistral → Groq
-const TOOL_PROVIDER_ORDER = [Provider.GROQ, Provider.MISTRAL, Provider.GEMINI];
+const TOOL_PROVIDER_ORDER = [Provider.MISTRAL, Provider.GROQ, Provider.GEMINI];
 // No-tool path: Groq → Mistral → Gemini  (fast first, expensive last)
 const FAST_PROVIDER_ORDER = [Provider.GROQ, Provider.MISTRAL, Provider.GEMINI];
 
@@ -285,27 +284,6 @@ const webSearchTool = tool(
   }
 );
 
-const sendEmailTool = tool(
-  async ({ to, subject, body }) => {
-    try {
-      const transporter = nodemailer.createTransport({
-        service: "gmail",
-        auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-      });
-      await transporter.sendMail({
-        from: `"F.R.I.D.A.Y" <${process.env.EMAIL_USER}>`,
-        to, subject, text: body,
-        html: body.replace(/\n/g, "<br>"),
-      });
-      return `Email sent to ${to}.`;
-    } catch (err) { return `Failed to send: ${err.message}`; }
-  },
-  {
-    name: "send_email",
-    description: "Send an email on behalf of the user.",
-    schema: z.object({ to: z.string(), subject: z.string(), body: z.string() }),
-  }
-);
 
 const getWeatherTool = tool(
   async ({ location }) => {
@@ -362,7 +340,7 @@ const getDatetimeTool = tool(
   }
 );
 
-const TOOLS = [webSearchTool, sendEmailTool, getWeatherTool, calculateTool, getDatetimeTool];
+const TOOLS = [webSearchTool, getWeatherTool, calculateTool, getDatetimeTool];
 const TOOL_MAP = Object.fromEntries(TOOLS.map((t) => [t.name, t]));
 
 // ══════════════════════════════════════════════════════════════════════════════
