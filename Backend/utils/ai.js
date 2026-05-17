@@ -9,6 +9,7 @@ import { ChatGroq } from "@langchain/groq";
 import { ChatOpenAI } from "@langchain/openai";
 import { z } from "zod";
 import { readFileSync } from "fs";
+import { evaluate } from "mathjs";
 
 let creatorInfo = "";
 try {
@@ -21,79 +22,99 @@ try {
 // ══════════════════════════════════════════════════════════════════════════════
 // SYSTEM PROMPT
 // ══════════════════════════════════════════════════════════════════════════════
-const SYSTEM_PROMPT = `You are F.R.I.D.A.Y, an elite AI by Anbhav. Smart, cited, conversational.
+const SYSTEM_PROMPT = `You are F.R.I.D.A.Y, an elite AI made by Anbhav. Be smart, accurate, and conversational.
 
 IDENTITY: Made by Anbhav (real name Abhishek). Never claim to be ChatGPT/Claude/Gemini.
-
 CREATOR INFO:
 ${creatorInfo}
-When asked about creator, use ONLY above info. Never search or guess.
+When asked about creator, use ONLY the above info. Never search for it.
 
-CONTEXT USE: Study conversation history — reference earlier topics, detect user type (dev/student/etc), connect related questions. Never repeat already-given info.
+## CONTEXT AWARENESS — CRITICAL
+- Always read the full conversation history before responding.
+- If user says "what about X?" or "aur X?" — understand they are continuing the PREVIOUS topic.
+- Example: If last topic was "current affairs" and user says "what about NEET 2026?" → they want NEET 2026 NEWS/UPDATES, not eligibility info.
+- Connect follow-up questions to the ongoing topic intelligently.
+- Never repeat information already given.
+- Detect user type (student/dev/professional) from conversation and adjust depth.
 
-RESPONSES:
-- Cite every fact as markdown links: *[Wikipedia](https://wikipedia.org)*, *[NDTV](https://ndtv.com)* — use actual source URLs.
-- Casual Hinglish + emojis when fitting 😄
-- Match user's language and energy
-- Add 1 bonus insight user didn't ask but would appreciate
-- Casual query → concise | Technical → thorough with detail
-- Never announce searching — do it silently
-- Search queries always in English
+## RESPONSE FORMAT — STRICT RULES
+- Use clean markdown: headings (##, ###), bullet points, bold for key terms.
+- NEVER use ASCII tables (|---|---|) unless user explicitly asks for a table.
+- NEVER output raw JSON or escaped strings like \\n.
+- Separate each major point/section with a blank line.
+- For news/current affairs: each item gets its own ### heading with source link below it.
+- Cite sources as markdown links: [Source Name](URL) — never as *(Source)*.
+- Casual Hinglish + emojis when tone matches 😄
+- Match user's language and energy.
+- NEVER announce searching — do it silently. Search queries always in English.
 
-FORMATTING (VERY IMPORTANT):
-- Always break response into short paragraphs — max 2-3 sentences per paragraph
-- Use bullet points or numbered lists for multiple items
-- Never dump everything into one paragraph
-- Add a blank line between every paragraph
-- For long answers: use bold headers to separate sections
+## FACTUALITY — STRICT
+- ONLY use facts from tool results. Never invent news, dates, stats, or political outcomes.
+- If you can't verify something from tools, say: "I couldn't verify this from current sources."
+- Never mix training knowledge with real-time claims.
 
-SEARCH: Max 3 times. After 1st result, check if complete — if not, search again differently.
-SEARCH FOR: news, prices, scores, weather, current leaders, exam results, products
-SKIP: coding, math, definitions, creative writing, casual chat, creator questions`;
+## SEARCH STRATEGY
+- Max 3 searches. After 1st result, check if answer is complete. If not → search again with a DIFFERENT query.
+- Search for: news, prices, scores, weather, current leaders, exam results, products, recent events.
+- Skip search for: coding, math, definitions, creative writing, casual chat, creator questions.`;
 
-const CLASSIFIER_PROMPT = `
-Need realtime web/tools?
+// ══════════════════════════════════════════════════════════════════════════════
+// CLASSIFIER PROMPT — Now receives conversation context
+// ══════════════════════════════════════════════════════════════════════════════
+const CLASSIFIER_PROMPT = `You are a smart query classifier. You see the last few messages of a conversation.
 
-Reply JSON only:
-{"needsTools":true/false,"complexity":"low|medium|high"}
+Your job: decide if the LATEST user message needs real-time web/tool search.
 
-true:
-news,current,latest,weather,price,score,result,2025,2026,update,API,release,jobs,visa,scholarship,"kya hua","abhi"
+CRITICAL CONTEXT RULE:
+- If earlier messages discussed current affairs, news, or recent events → follow-up questions almost certainly need search too.
+- "what about X?", "aur X?", "X ke baare mein?" in a news/current affairs conversation = needs search for X's latest news.
+- Don't classify follow-ups as "educational" if the conversation context is clearly about current events.
 
-false:
-coding,math,writing,history,definitions,conversation
+Reply ONLY valid JSON (no markdown, no explanation):
+{"needsTools": true/false, "complexity": "low|medium|high", "intent": "one line describing what user actually wants"}
 
-if unsure=true
-`;
+NEEDS SEARCH (true): news, current events, prices, scores, weather, recent results, "latest/current/2025/2026/aaj/abhi/update/kaun/kya hua"
+SKIP SEARCH (false): coding, math, writing help, definitions, stable history, casual chat, follow-up on AI's own previous answer
+When in doubt → true`;
 
-const TITLE_PROMPT = `5-word max chat title. Title Case. No quotes/punctuation. Specific, not generic. Reply ONLY the title.`;
+// ══════════════════════════════════════════════════════════════════════════════
+// TITLE PROMPT
+// ══════════════════════════════════════════════════════════════════════════════
+const TITLE_PROMPT = `Generate a chat title in max 5 words. Title Case. No quotes or punctuation. Be specific to the topic, not generic. Return ONLY the title.`;
 
-const GAP_CHECK_PROMPT = `Search done. Answer complete with recent info? Missing anything important?
-If incomplete → search again with a DIFFERENT specific query.
-If complete → give final answer with *(Source Name)* citations. MAX 3 searches total.`;
+// ══════════════════════════════════════════════════════════════════════════════
+// GAP CHECK — after first search
+// ══════════════════════════════════════════════════════════════════════════════
+const GAP_CHECK_PROMPT = `Search done. Is the answer complete with recent, accurate info?
+
+If INCOMPLETE → do ONE more web_search with a completely different, more specific query.
+
+If COMPLETE → write the final answer now:
+- Use ## and ### headings
+- Bullet points for details
+- Each news item as its own section
+- Cite sources as markdown links: [Source Name](URL)
+- NO ASCII tables, NO raw JSON, NO escaped characters
+- MAX 3 searches total`;
 
 // ══════════════════════════════════════════════════════════════════════════════
 // PROVIDERS
 // ══════════════════════════════════════════════════════════════════════════════
 const Provider = {
-  GPT_OSS:    "gpt_oss",    // Tool Calling + Agents  — openai/gpt-oss-120b
-  NEMOTRON:   "nemotron",   // Main Conversational    — nvidia/nemotron-3-super-120b
-  GLM:        "glm",        // Advanced Agent Backup  — z-ai/glm-4.5-air
-  LLAMA_FREE: "llama_free", // General Fallback       — meta-llama/llama-3.3-70b-instruct
-  GROQ:       "groq",       // Ultra Fast             — llama-3.3-70b on Groq
+  GPT_OSS:    "gpt_oss",
+  NEMOTRON:   "nemotron",
+  GLM:        "glm",
+  LLAMA_FREE: "llama_free",
+  GROQ:       "groq",
 };
 
-// Tool calling: gpt-oss first (best native tool support), then fallbacks
-const TOOL_PROVIDER_ORDER  = [Provider.GPT_OSS, Provider.NEMOTRON, Provider.GLM, Provider.GROQ];
-
-// Fast chat: Groq first (lowest latency), then free OpenRouter models
-const FAST_PROVIDER_ORDER  = [Provider.GROQ, Provider.NEMOTRON, Provider.GLM, Provider.LLAMA_FREE];
-
+const TOOL_PROVIDER_ORDER = [Provider.GPT_OSS, Provider.NEMOTRON, Provider.GLM, Provider.GROQ];
+const FAST_PROVIDER_ORDER = [Provider.GROQ, Provider.NEMOTRON, Provider.GLM, Provider.LLAMA_FREE];
 const RETRY_AFTER_MINUTES = 2;
 
 const providerState = {
-  exhausted:  { gpt_oss: false, nemotron: false, glm: false, llama_free: false, groq: false },
-  exhaustedAt:{ gpt_oss: null,  nemotron: null,  glm: null,  llama_free: null,  groq: null  },
+  exhausted:   { gpt_oss: false, nemotron: false, glm: false, llama_free: false, groq: false },
+  exhaustedAt: { gpt_oss: null,  nemotron: null,  glm: null,  llama_free: null,  groq: null  },
 };
 
 const isExhausted = (p) => {
@@ -102,7 +123,7 @@ const isExhausted = (p) => {
   if (at && (Date.now() - at) / 60000 >= RETRY_AFTER_MINUTES) {
     providerState.exhausted[p] = false;
     providerState.exhaustedAt[p] = null;
-    console.log(`[AI] ${p} cooldown ended — re-enabled.`);
+    console.log(`[AI] ${p} cooldown ended.`);
     return false;
   }
   return true;
@@ -111,14 +132,12 @@ const isExhausted = (p) => {
 const markExhausted = (p) => {
   providerState.exhausted[p] = true;
   providerState.exhaustedAt[p] = Date.now();
-  console.warn(`[AI] ${p} marked exhausted.`);
+  console.warn(`[AI] ${p} exhausted.`);
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
 // MODEL FACTORIES
 // ══════════════════════════════════════════════════════════════════════════════
-
-// Shared helper — all OpenRouter models use the same base config
 const openRouterModel = (modelName) =>
   new ChatOpenAI({
     modelName,
@@ -131,7 +150,7 @@ const openRouterModel = (modelName) =>
       },
     },
     temperature: 0.7,
-    maxTokens: 2048,
+    maxTokens: 4096,
   });
 
 const makeGptOss    = () => openRouterModel("openai/gpt-oss-120b:free");
@@ -143,21 +162,21 @@ const makeGroq = () =>
   new ChatGroq({
     model: "llama-3.3-70b-versatile",
     apiKey: process.env.GROQ_API_KEY,
-    temperature: 0.7,
+    temperature: 0.2,
     maxTokens: 2048,
   });
 
-let classifierModel = null;
+let _classifier = null;
 const getClassifier = () => {
-  if (!classifierModel) {
-    classifierModel = new ChatGroq({
+  if (!_classifier) {
+    _classifier = new ChatGroq({
       model: "llama-3.1-8b-instant",
       apiKey: process.env.GROQ_API_KEY,
       temperature: 0,
-      maxTokens: 100,
+      maxTokens: 120,
     });
   }
-  return classifierModel;
+  return _classifier;
 };
 
 const makeModel = (provider) => {
@@ -169,31 +188,41 @@ const makeModel = (provider) => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
-// QUERY CLASSIFIER
+// CONTEXT-AWARE CLASSIFIER
+// The KEY fix: classifier now sees last 3 messages, not just current one
 // ══════════════════════════════════════════════════════════════════════════════
-const classifyQuery = async (userMessage) => {
+const classifyQuery = async (recentMessages) => {
   try {
+    // Build a mini context string from last 3 messages
+    const contextWindow = recentMessages
+      .slice(-3) // last 3 messages
+      .map((m) => {
+        const role = m.role === "user" ? "User" : "AI";
+        return `${role}: ${m.content.slice(0, 200)}`;
+      })
+      .join("\n");
+
     const res = await getClassifier().invoke([
       new SystemMessage(CLASSIFIER_PROMPT),
-      new HumanMessage(`Query: "${userMessage}"`),
+      new HumanMessage(`Conversation so far:\n${contextWindow}\n\nClassify the LATEST user message above.`),
     ]);
-    const text = res.content?.trim() || "{}";
-    const clean = text.replace(/```json|```/g, "").trim();
+
+    const clean = (res.content?.trim() || "{}").replace(/```json|```/g, "").trim();
     const parsed = JSON.parse(clean);
-    console.log(`[Router] needsTools=${parsed.needsTools} | complexity=${parsed.complexity} | ${parsed.reason}`);
+    console.log(`[Router] tools=${parsed.needsTools} | complexity=${parsed.complexity} | intent: ${parsed.intent}`);
     return {
       needsTools: Boolean(parsed.needsTools),
       complexity: parsed.complexity || "medium",
-      reason: parsed.reason || "",
+      intent: parsed.intent || "",
     };
   } catch (err) {
-    console.warn("[Router] Classifier failed, defaulting safe:", err.message);
-    return { needsTools: true, complexity: "medium", reason: "classifier error" };
+    console.warn("[Router] Classifier failed:", err.message);
+    return { needsTools: true, complexity: "medium", intent: "unknown" };
   }
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
-// SEARCH — Tavily primary, Serper fallback
+// SEARCH — Tavily → Serper fallback
 // ══════════════════════════════════════════════════════════════════════════════
 const SearchProvider = { TAVILY: "tavily", SERPER: "serper" };
 const SEARCH_RETRY_MINUTES = 60;
@@ -210,7 +239,6 @@ const isSearchExhausted = (sp) => {
   if (at && (Date.now() - at) / 60000 >= SEARCH_RETRY_MINUTES) {
     searchState.exhausted[sp] = false;
     searchState.exhaustedAt[sp] = null;
-    console.log(`[Search] ${sp} cooldown ended.`);
     return false;
   }
   return true;
@@ -219,9 +247,28 @@ const isSearchExhausted = (sp) => {
 const markSearchExhausted = (sp) => {
   searchState.exhausted[sp] = true;
   searchState.exhaustedAt[sp] = Date.now();
-  searchState.current =
-    sp === SearchProvider.TAVILY ? SearchProvider.SERPER : SearchProvider.TAVILY;
-  console.warn(`[Search] ${sp} exhausted — switching.`);
+  searchState.current = sp === SearchProvider.TAVILY ? SearchProvider.SERPER : SearchProvider.TAVILY;
+  console.warn(`[Search] ${sp} exhausted.`);
+};
+
+// Format search results as clean readable text (no JSON, no escapes)
+const formatTavilyResults = (data) => {
+  const parts = [];
+  if (data.answer) parts.push(`Quick Answer: ${data.answer}`);
+  data.results?.slice(0, 4).forEach((r, i) => {
+    parts.push(`\n[Result ${i + 1}]\nTitle: ${r.title}\nContent: ${r.content?.slice(0, 500)}\nSource URL: ${r.url}`);
+  });
+  return parts.join("\n") || "No results found.";
+};
+
+const formatSerperResults = (data) => {
+  const parts = [];
+  if (data.answerBox) parts.push(`Quick Answer: ${data.answerBox.answer || data.answerBox.snippet}`);
+  if (data.knowledgeGraph) parts.push(`Knowledge: ${data.knowledgeGraph.title} — ${data.knowledgeGraph.description || ""}`);
+  data.organic?.slice(0, 4).forEach((r, i) => {
+    parts.push(`\n[Result ${i + 1}]\nTitle: ${r.title}\nSnippet: ${r.snippet}\nSource URL: ${r.link}`);
+  });
+  return parts.join("\n") || "No results found.";
 };
 
 const searchWithTavily = async (query) => {
@@ -240,63 +287,40 @@ const searchWithTavily = async (query) => {
     markSearchExhausted(SearchProvider.TAVILY);
     throw new Error("EXHAUSTED");
   }
-  if (!res.ok) throw new Error(`Tavily HTTP ${res.status}`);
-  const data = await res.json();
-  const parts = [];
-  if (data.answer) parts.push(`DIRECT ANSWER: ${data.answer}`);
-  data.results?.slice(0, 5).forEach((r, i) =>
-    parts.push(`[${i + 1}] ${r.title}\n${r.content?.slice(0, 600)}\nSOURCE: ${r.url}`)
-  );
-  return parts.join("\n\n") || "No results found.";
+  if (!res.ok) throw new Error(`Tavily ${res.status}`);
+  return formatTavilyResults(await res.json());
 };
 
 const searchWithSerper = async (query) => {
   const res = await fetch("https://google.serper.dev/search", {
     method: "POST",
-    headers: {
-      "X-API-KEY": process.env.SERPER_API_KEY,
-      "Content-Type": "application/json",
-    },
+    headers: { "X-API-KEY": process.env.SERPER_API_KEY, "Content-Type": "application/json" },
     body: JSON.stringify({ q: query, num: 5 }),
   });
   if (res.status === 429 || res.status === 402) {
     markSearchExhausted(SearchProvider.SERPER);
     throw new Error("EXHAUSTED");
   }
-  if (!res.ok) throw new Error(`Serper HTTP ${res.status}`);
-  const data = await res.json();
-  const parts = [];
-  if (data.answerBox)
-    parts.push(`DIRECT ANSWER: ${data.answerBox.answer || data.answerBox.snippet}`);
-  if (data.knowledgeGraph)
-    parts.push(`KNOWLEDGE: ${data.knowledgeGraph.title} — ${data.knowledgeGraph.description || ""}`);
-  data.organic?.slice(0, 5).forEach((r, i) =>
-    parts.push(`[${i + 1}] ${r.title}\n${r.snippet}\nSOURCE: ${r.link}`)
-  );
-  return parts.join("\n\n") || "No results found.";
+  if (!res.ok) throw new Error(`Serper ${res.status}`);
+  return formatSerperResults(await res.json());
 };
 
 const smartSearch = async (query) => {
-  const available = [SearchProvider.TAVILY, SearchProvider.SERPER].filter(
-    (sp) => !isSearchExhausted(sp)
-  );
+  const available = [SearchProvider.TAVILY, SearchProvider.SERPER].filter((sp) => !isSearchExhausted(sp));
   const order = available.includes(searchState.current)
     ? [searchState.current, ...available.filter((sp) => sp !== searchState.current)]
     : available;
 
   for (const sp of order) {
     try {
-      const result =
-        sp === SearchProvider.TAVILY
-          ? await searchWithTavily(query)
-          : await searchWithSerper(query);
+      const result = sp === SearchProvider.TAVILY ? await searchWithTavily(query) : await searchWithSerper(query);
       console.log(`[Search] ✅ ${sp} | "${query}"`);
       return result;
     } catch (err) {
-      if (err.message !== "EXHAUSTED") console.error(`[Search] ${sp} error:`, err.message);
+      if (err.message !== "EXHAUSTED") console.error(`[Search] ${sp}:`, err.message);
     }
   }
-  return "Search unavailable — both providers exhausted.";
+  return "Search unavailable right now.";
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -309,10 +333,8 @@ const webSearchTool = tool(
   },
   {
     name: "web_search",
-    description: "Search the internet for real-time information: news, prices, sports scores, exam results, current events, government, politics, people, products, recent updates. Call multiple times with different queries if first result is incomplete.",
-    schema: z.object({
-      query: z.string().describe("Search query in English only. Be specific."),
-    }),
+    description: "Real-time web search: news, prices, scores, events, current affairs, people, products. Use multiple times with DIFFERENT queries if first result is incomplete.",
+    schema: z.object({ query: z.string().describe("Specific English search query") }),
   }
 );
 
@@ -324,33 +346,27 @@ const getWeatherTool = tool(
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json();
-      return `${d.name}, ${d.sys.country}: ${d.weather[0].description}, Temp: ${d.main.temp}°C (feels like ${d.main.feels_like}°C), Humidity: ${d.main.humidity}%, Wind: ${d.wind.speed} m/s, Visibility: ${(d.visibility / 1000).toFixed(1)}km`;
-    } catch (err) { return `Weather fetch failed: ${err.message}`; }
+      return `${d.name}, ${d.sys.country}: ${d.weather[0].description}, ${d.main.temp}°C (feels ${d.main.feels_like}°C), humidity ${d.main.humidity}%, wind ${d.wind.speed}m/s`;
+    } catch (err) { return `Weather failed: ${err.message}`; }
   },
   {
     name: "get_weather",
-    description: "Get current real-time weather for any city or location worldwide.",
-    schema: z.object({
-      location: z.string().describe("City name e.g. Delhi, Mumbai, New York, London"),
-    }),
+    description: "Current weather for any city.",
+    schema: z.object({ location: z.string().describe("City name e.g. Delhi, Mumbai") }),
   }
 );
 
 const calculateTool = tool(
   async ({ expression }) => {
     try {
-      const sanitized = expression.replace(/[^0-9+\-*/().,% ]/g, "");
-      // eslint-disable-next-line no-new-func
-      const result = new Function(`"use strict"; return (${sanitized})`)();
+      const result = evaluate(expression);
       return `${expression} = ${result}`;
-    } catch { return `Could not evaluate: "${expression}"`; }
+    } catch { return `Cannot evaluate: "${expression}"`; }
   },
   {
     name: "calculate",
-    description: "Evaluate math expressions accurately: percentages, conversions, formulas.",
-    schema: z.object({
-      expression: z.string().describe("Math expression e.g. '15% of 85000', '(120 * 3) / 7'"),
-    }),
+    description: "Evaluate math expressions accurately.",
+    schema: z.object({ expression: z.string().describe("e.g. '15% of 85000'") }),
   }
 );
 
@@ -363,13 +379,9 @@ const getDatetimeTool = tool(
     }).format(new Date()),
   {
     name: "get_current_datetime",
-    description: "Get the current date and time in any timezone.",
+    description: "Current date and time.",
     schema: z.object({
-      timezone: z
-        .string()
-        .nullable()
-        .optional()
-        .describe("IANA timezone string. Defaults to Asia/Kolkata (IST)."),
+      timezone: z.string().nullable().optional().describe("IANA timezone, default Asia/Kolkata"),
     }),
   }
 );
@@ -383,17 +395,16 @@ const TOOL_MAP = Object.fromEntries(TOOLS.map((t) => [t.name, t]));
 const runAgenticLoop = async (lcMessages, modelWithTools) => {
   let response = await modelWithTools.invoke(lcMessages);
   let searchCount = 0;
-  const MAX_SEARCHES = 3;
 
   while (response.tool_calls?.length) {
-    const webSearchCalls = response.tool_calls.filter((tc) => tc.name === "web_search");
-    searchCount += webSearchCalls.length;
+    const webCalls = response.tool_calls.filter((tc) => tc.name === "web_search");
+    searchCount += webCalls.length;
 
     const toolResults = await Promise.all(
       response.tool_calls.map(async (tc) => {
         const handler = TOOL_MAP[tc.name];
         const result = handler ? await handler.invoke(tc.args) : `Tool "${tc.name}" not found.`;
-        console.log(`[Tool] ${tc.name} | ${JSON.stringify(tc.args).slice(0, 100)}`);
+        console.log(`[Tool] ${tc.name} | ${JSON.stringify(tc.args).slice(0, 80)}`);
         return new ToolMessage({
           tool_call_id: tc.id,
           content: typeof result === "string" ? result : JSON.stringify(result),
@@ -403,28 +414,37 @@ const runAgenticLoop = async (lcMessages, modelWithTools) => {
 
     lcMessages.push(response, ...toolResults);
 
-    if (webSearchCalls.length > 0 && searchCount === 1) {
+    if (webCalls.length > 0 && searchCount === 1) {
       lcMessages.push(new SystemMessage(GAP_CHECK_PROMPT));
-      console.log("[AI] Gap detection injected.");
+      console.log("[AI] Gap check injected.");
     }
-
-    if (searchCount >= MAX_SEARCHES) {
-      lcMessages.push(
-        new SystemMessage(
-          "Max searches reached. NOW synthesize all results into a complete, cited final answer. Use *(Source Name)* for citations. Do NOT search again."
-        )
-      );
-      console.log("[AI] Max searches — forcing final answer.");
+    if (searchCount >= 3) {
+      lcMessages.push(new SystemMessage(
+        "Max searches reached. Give the final answer now using clean markdown. Use [Source Name](URL) for citations. NO tables, NO raw JSON."
+      ));
+      console.log("[AI] Max searches — final answer forced.");
     }
 
     response = await modelWithTools.invoke(lcMessages);
   }
 
-  return response.content?.trim() || "I couldn't generate a response.";
+  return cleanResponse(response.content?.trim() || "I couldn't generate a response.");
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
-// GROQ TOOL-CALL FALLBACK
+// RESPONSE CLEANER — strips escaped chars, raw JSON artifacts
+// ══════════════════════════════════════════════════════════════════════════════
+const cleanResponse = (text) => {
+  return text
+    .replace(/^["']|["']$/g, "")   // strip wrapping quotes
+    .replace(/\\n/g, "\n")          // unescape newlines
+    .replace(/\\t/g, "\t")          // unescape tabs
+    .replace(/\\\"/g, '"')          // unescape quotes
+    .trim();
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// GROQ FALLBACK
 // ══════════════════════════════════════════════════════════════════════════════
 const runGroqToolPath = async (lcMessages) => {
   const model = makeGroq();
@@ -444,16 +464,11 @@ const runGroqToolPath = async (lcMessages) => {
     const searchResult = await smartSearch(query).catch(() => "");
 
     const msgs = searchResult
-      ? [
-          new SystemMessage(
-            SYSTEM_PROMPT + `\n\nREAL-TIME SEARCH RESULTS (use ONLY this for factual answers, cite inline):\n${searchResult}`
-          ),
-          ...lcMessages.slice(1),
-        ]
+      ? [new SystemMessage(SYSTEM_PROMPT + `\n\nSEARCH RESULTS (use ONLY this, cite as markdown links):\n${searchResult}`), ...lcMessages.slice(1)]
       : lcMessages;
 
     const response = await model.invoke(msgs);
-    return response.content?.trim() || "I couldn't generate a response.";
+    return cleanResponse(response.content?.trim() || "I couldn't generate a response.");
   }
 };
 
@@ -462,75 +477,56 @@ const runGroqToolPath = async (lcMessages) => {
 // ══════════════════════════════════════════════════════════════════════════════
 const shouldFallback = (err) => {
   const msg = err?.message || "";
-  const code = err?.error?.error?.code || "";
   return (
-    err?.status === 429 ||
-    err?.status === 402 ||
-    err?.status === 503 ||
-    err?.status === 404 ||
-    msg.includes("429") ||
-    msg.includes("quota") ||
-    msg.includes("Too Many Requests") ||
-    msg.includes("rate limit") ||
-    msg.includes("EXHAUSTED") ||
-    msg.includes("tool_use_failed") ||
-    msg.includes("Failed to call a function") ||
-    msg.includes("overloaded") ||
+    err?.status === 429 || err?.status === 402 || err?.status === 503 || err?.status === 404 ||
+    msg.includes("429") || msg.includes("quota") || msg.includes("rate limit") ||
+    msg.includes("Too Many Requests") || msg.includes("overloaded") ||
+    msg.includes("tool_use_failed") || msg.includes("Failed to call a function") ||
     msg.includes("No endpoints found") ||
-    code === "tool_use_failed"
+    err?.error?.error?.code === "tool_use_failed"
   );
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
-// TRY A PROVIDER
+// TRY PROVIDER
 // ══════════════════════════════════════════════════════════════════════════════
 const tryProvider = async (provider, lcMessages, withTools) => {
   console.log(`[AI] Trying ${provider} | tools=${withTools}`);
-
   if (!withTools) {
-    const model = makeModel(provider);
-    const response = await model.invoke(lcMessages);
-    return response.content?.trim() || "I couldn't generate a response.";
+    const response = await makeModel(provider).invoke(lcMessages);
+    return cleanResponse(response.content?.trim() || "I couldn't generate a response.");
   }
-
   if (provider === Provider.GROQ) return await runGroqToolPath(lcMessages);
-
-  const model = makeModel(provider);
-  return await runAgenticLoop([...lcMessages], model.bindTools(TOOLS));
+  return await runAgenticLoop([...lcMessages], makeModel(provider).bindTools(TOOLS));
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
 // CONTEXT BUILDER
 // ══════════════════════════════════════════════════════════════════════════════
-const buildContextMessages = (historyMessages, systemPrompt) => {
-  const lcMessages = [new SystemMessage(systemPrompt)];
-  for (const msg of historyMessages) {
-    if (msg.role === "user") lcMessages.push(new HumanMessage(msg.content));
-    else if (msg.role === "ai" || msg.role === "assistant") lcMessages.push(new AIMessage(msg.content));
+const buildContextMessages = (history, systemPrompt) => {
+  const msgs = [new SystemMessage(systemPrompt)];
+  for (const msg of history) {
+    if (msg.role === "user") msgs.push(new HumanMessage(msg.content));
+    else if (msg.role === "ai" || msg.role === "assistant") msgs.push(new AIMessage(msg.content));
   }
-  return lcMessages;
+  return msgs;
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
-// CONTEXT SUMMARY
+// OLD CONTEXT SUMMARIZER
 // ══════════════════════════════════════════════════════════════════════════════
 const summarizeOldContext = async (oldMessages) => {
-  if (!oldMessages || oldMessages.length === 0) return null;
+  if (!oldMessages?.length) return null;
   try {
-    const model = makeGroq();
     const formatted = oldMessages
-      .map((m) => `${m.role === "user" ? "User" : "AI"}: ${m.content}`)
+      .map((m) => `${m.role === "user" ? "U" : "AI"}: ${m.content.slice(0, 250)}`)
       .join("\n");
-    const res = await model.invoke([
-      new SystemMessage(
-        "Summarize this conversation history in 3-5 bullet points. Focus on: topics discussed, user preferences revealed, key facts established, and any ongoing context. Be concise."
-      ),
+    const res = await makeGroq().invoke([
+      new SystemMessage("Summarize in 3 bullet points: key topics, user preferences, important facts established. Be very concise."),
       new HumanMessage(formatted),
     ]);
     return res.content?.trim() || null;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -538,14 +534,13 @@ const summarizeOldContext = async (oldMessages) => {
 // ══════════════════════════════════════════════════════════════════════════════
 export const generateChatTitle = async (message) => {
   try {
-    const model = makeGroq();
-    const response = await model.invoke([
+    const res = await makeGroq().invoke([
       new SystemMessage(TITLE_PROMPT),
-      new HumanMessage(message),
+      new HumanMessage(message.slice(0, 200)),
     ]);
-    return response.content?.trim() || "New Chat";
+    return res.content?.trim() || "New Chat";
   } catch (err) {
-    console.error("[AI] generateChatTitle error:", err.message);
+    console.error("[AI] Title error:", err.message);
     return "New Chat";
   }
 };
@@ -561,35 +556,32 @@ export const generateResponse = async (historyMessages, options = {}) => {
     const oldMessages = historyMessages.slice(0, splitPoint);
     recentMessages = historyMessages.slice(splitPoint);
     if (oldMessages.length > 0) {
-      console.log(`[AI] Summarizing ${oldMessages.length} old messages for context.`);
+      console.log(`[AI] Summarizing ${oldMessages.length} old messages.`);
       contextSummary = await summarizeOldContext(oldMessages);
     }
   }
 
-  let systemPrompt = SYSTEM_PROMPT;
-  if (contextSummary) {
-    systemPrompt += `\n\n## EARLIER CONVERSATION SUMMARY\n${contextSummary}\n\nUse this background context to give more personalized, relevant answers.`;
-  }
+  const systemPrompt = contextSummary
+    ? SYSTEM_PROMPT + `\n\n## EARLIER CONTEXT SUMMARY\n${contextSummary}`
+    : SYSTEM_PROMPT;
 
   const lcMessages = buildContextMessages(recentMessages, systemPrompt);
+
   const lastUserMsg = [...recentMessages].reverse().find((m) => m.role === "user");
   const userText = lastUserMsg?.content || "";
+  if (!userText) return "Kuch toh bolo bhai! 😄";
 
-  if (!userText) return "Kuch toh bolo bhai! 😄 Kya help chahiye?";
-
-  const { needsTools, complexity } = await classifyQuery(userText);
-  console.log(`[AI] complexity=${complexity} | needsTools=${needsTools}`);
+  // ✅ KEY FIX: Pass recentMessages (with context) to classifier, not just userText
+  const { needsTools, intent } = await classifyQuery(recentMessages);
+  console.log(`[AI] intent="${intent}" | needsTools=${needsTools}`);
 
   const providerOrder = needsTools ? TOOL_PROVIDER_ORDER : FAST_PROVIDER_ORDER;
 
   for (const provider of providerOrder) {
-    if (isExhausted(provider)) {
-      console.log(`[AI] Skipping ${provider} — exhausted.`);
-      continue;
-    }
+    if (isExhausted(provider)) continue;
     try {
       const result = await tryProvider(provider, lcMessages, needsTools);
-      console.log(`[AI] ✅ Response from ${provider}`);
+      console.log(`[AI] ✅ ${provider}`);
       return result;
     } catch (err) {
       console.error(`[AI] ${provider} failed:`, err.message);
@@ -598,5 +590,5 @@ export const generateResponse = async (historyMessages, options = {}) => {
     }
   }
 
-  return "Yaar, abhi saare AI providers busy hain 😅 Thodi der baad try karo!";
+  return "Yaar, saare providers busy hain 😅 Thodi der baad try karo!";
 };
