@@ -9,14 +9,10 @@ import { ChatGroq } from "@langchain/groq";
 import { ChatOpenAI } from "@langchain/openai";
 import { z } from "zod";
 import { readFileSync } from "fs";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 let creatorInfo = "";
 try {
-  creatorInfo = readFileSync(join(__dirname, "creator.txt"), "utf-8").trim();
+  creatorInfo = readFileSync("./creator.txt", "utf-8").trim();
   console.log("[AI] ✅ creator.txt loaded");
 } catch (err) {
   console.warn("[AI] creator.txt not found:", err.message);
@@ -36,7 +32,7 @@ When asked about creator, use ONLY above info. Never search or guess.
 CONTEXT USE: Study conversation history — reference earlier topics, detect user type (dev/student/etc), connect related questions. Never repeat already-given info.
 
 RESPONSES:
-- Cite every fact: *(Wikipedia)*, *(NDTV)* — from URL domain
+- Cite every fact as markdown links: *[Wikipedia](https://wikipedia.org)*, *[NDTV](https://ndtv.com)* — use actual source URLs.
 - Casual Hinglish + emojis when fitting 😄
 - Match user's language and energy
 - Add 1 bonus insight user didn't ask but would appreciate
@@ -55,12 +51,20 @@ SEARCH: Max 3 times. After 1st result, check if complete — if not, search agai
 SEARCH FOR: news, prices, scores, weather, current leaders, exam results, products
 SKIP: coding, math, definitions, creative writing, casual chat, creator questions`;
 
-const CLASSIFIER_PROMPT = `Classify if this query needs real-time web search.
-Reply ONLY valid JSON: {"needsTools":true/false,"complexity":"low|medium|high"}
+const CLASSIFIER_PROMPT = `
+Need realtime web/tools?
 
-SEARCH=true: news, prices, scores, weather, politicians, exam results, "aaj/abhi/latest/current/2025/2026/price/score/kaun"
-SEARCH=false: coding, math, writing, definitions, history, advice, follow-ups on AI's own answer, questions about creator/Anbhav/Abhishek
-Doubt → true`;
+Reply JSON only:
+{"needsTools":true/false,"complexity":"low|medium|high"}
+
+true:
+news,current,latest,weather,price,score,result,2025,2026,update,API,release,jobs,visa,scholarship,"kya hua","abhi"
+
+false:
+coding,math,writing,history,definitions,conversation
+
+if unsure=true
+`;
 
 const TITLE_PROMPT = `5-word max chat title. Title Case. No quotes/punctuation. Specific, not generic. Reply ONLY the title.`;
 
@@ -72,19 +76,24 @@ If complete → give final answer with *(Source Name)* citations. MAX 3 searches
 // PROVIDERS
 // ══════════════════════════════════════════════════════════════════════════════
 const Provider = {
-  OPENAI: "openai",
-  DEEPSEEK: "deepseek",
-  NVIDIA: "nvidia",
-  GROQ: "groq",
+  GPT_OSS:    "gpt_oss",    // Tool Calling + Agents  — openai/gpt-oss-120b
+  NEMOTRON:   "nemotron",   // Main Conversational    — nvidia/nemotron-3-super-120b
+  GLM:        "glm",        // Advanced Agent Backup  — z-ai/glm-4.5-air
+  LLAMA_FREE: "llama_free", // General Fallback       — meta-llama/llama-3.3-70b-instruct
+  GROQ:       "groq",       // Ultra Fast             — llama-3.3-70b on Groq
 };
 
-const TOOL_PROVIDER_ORDER = [Provider.OPENAI, Provider.NVIDIA, Provider.DEEPSEEK, Provider.GROQ];
-const FAST_PROVIDER_ORDER = [Provider.GROQ, Provider.DEEPSEEK, Provider.NVIDIA, Provider.OPENAI];
+// Tool calling: gpt-oss first (best native tool support), then fallbacks
+const TOOL_PROVIDER_ORDER  = [Provider.GPT_OSS, Provider.NEMOTRON, Provider.GLM, Provider.GROQ];
+
+// Fast chat: Groq first (lowest latency), then free OpenRouter models
+const FAST_PROVIDER_ORDER  = [Provider.GROQ, Provider.NEMOTRON, Provider.GLM, Provider.LLAMA_FREE];
+
 const RETRY_AFTER_MINUTES = 2;
 
 const providerState = {
-  exhausted: { openai: false, nvidia: false, deepseek: false, groq: false },
-  exhaustedAt: { openai: null, nvidia: null, deepseek: null, groq: null },
+  exhausted:  { gpt_oss: false, nemotron: false, glm: false, llama_free: false, groq: false },
+  exhaustedAt:{ gpt_oss: null,  nemotron: null,  glm: null,  llama_free: null,  groq: null  },
 };
 
 const isExhausted = (p) => {
@@ -108,9 +117,11 @@ const markExhausted = (p) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // MODEL FACTORIES
 // ══════════════════════════════════════════════════════════════════════════════
-const makeOpenAI = () =>
+
+// Shared helper — all OpenRouter models use the same base config
+const openRouterModel = (modelName) =>
   new ChatOpenAI({
-    modelName: "openai/gpt-4o-mini:free",
+    modelName,
     apiKey: process.env.OPENROUTER_API_KEY,
     configuration: {
       baseURL: "https://openrouter.ai/api/v1",
@@ -123,36 +134,10 @@ const makeOpenAI = () =>
     maxTokens: 2048,
   });
 
-const makeNvidia = () =>
-  new ChatOpenAI({
-    modelName: "nvidia/llama-3.1-nemotron-ultra-253b-v1:free",
-    apiKey: process.env.OPENROUTER_API_KEY,
-    configuration: {
-      baseURL: "https://openrouter.ai/api/v1",
-      defaultHeaders: {
-        "HTTP-Referer": process.env.CLIENT_URL || "https://friday-ai.app",
-        "X-Title": "F.R.I.D.A.Y",
-      },
-    },
-    temperature: 0.7,
-    maxTokens: 2048,
-  });
-
-// ✅ FIX: DeepSeek via OpenRouter using ChatOpenAI (NOT ChatDeepseek)
-const makeDeepSeek = () =>
-  new ChatOpenAI({
-    modelName: "deepseek/deepseek-r1:free",
-    apiKey: process.env.OPENROUTER_API_KEY,
-    configuration: {
-      baseURL: "https://openrouter.ai/api/v1",
-      defaultHeaders: {
-        "HTTP-Referer": process.env.CLIENT_URL || "https://friday-ai.app",
-        "X-Title": "F.R.I.D.A.Y",
-      },
-    },
-    temperature: 0.7,
-    maxTokens: 2048,
-  });
+const makeGptOss    = () => openRouterModel("openai/gpt-oss-120b:free");
+const makeNemotron  = () => openRouterModel("nvidia/nemotron-3-super-120b-a12b:free");
+const makeGlm       = () => openRouterModel("z-ai/glm-4.5-air:free");
+const makeLlamaFree = () => openRouterModel("meta-llama/llama-3.3-70b-instruct:free");
 
 const makeGroq = () =>
   new ChatGroq({
@@ -175,12 +160,12 @@ const getClassifier = () => {
   return classifierModel;
 };
 
-// ✅ FIX: makeDeepSeek() not deepseek()
 const makeModel = (provider) => {
-  if (provider === Provider.OPENAI) return makeOpenAI();
-  if (provider === Provider.NVIDIA) return makeNvidia();
-  if (provider === Provider.GROQ) return makeGroq();
-  if (provider === Provider.DEEPSEEK) return makeDeepSeek();
+  if (provider === Provider.GPT_OSS)    return makeGptOss();
+  if (provider === Provider.NEMOTRON)   return makeNemotron();
+  if (provider === Provider.GLM)        return makeGlm();
+  if (provider === Provider.LLAMA_FREE) return makeLlamaFree();
+  if (provider === Provider.GROQ)       return makeGroq();
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -195,9 +180,7 @@ const classifyQuery = async (userMessage) => {
     const text = res.content?.trim() || "{}";
     const clean = text.replace(/```json|```/g, "").trim();
     const parsed = JSON.parse(clean);
-    console.log(
-      `[Router] needsTools=${parsed.needsTools} | complexity=${parsed.complexity} | ${parsed.reason}`
-    );
+    console.log(`[Router] needsTools=${parsed.needsTools} | complexity=${parsed.complexity} | ${parsed.reason}`);
     return {
       needsTools: Boolean(parsed.needsTools),
       complexity: parsed.complexity || "medium",
@@ -286,9 +269,7 @@ const searchWithSerper = async (query) => {
   if (data.answerBox)
     parts.push(`DIRECT ANSWER: ${data.answerBox.answer || data.answerBox.snippet}`);
   if (data.knowledgeGraph)
-    parts.push(
-      `KNOWLEDGE: ${data.knowledgeGraph.title} — ${data.knowledgeGraph.description || ""}`
-    );
+    parts.push(`KNOWLEDGE: ${data.knowledgeGraph.title} — ${data.knowledgeGraph.description || ""}`);
   data.organic?.slice(0, 5).forEach((r, i) =>
     parts.push(`[${i + 1}] ${r.title}\n${r.snippet}\nSOURCE: ${r.link}`)
   );
@@ -323,16 +304,12 @@ const smartSearch = async (query) => {
 // ══════════════════════════════════════════════════════════════════════════════
 const webSearchTool = tool(
   async ({ query }) => {
-    try {
-      return await smartSearch(query);
-    } catch (err) {
-      return `Search failed: ${err.message}`;
-    }
+    try { return await smartSearch(query); }
+    catch (err) { return `Search failed: ${err.message}`; }
   },
   {
     name: "web_search",
-    description:
-      "Search the internet for real-time information: news, prices, sports scores, exam results, current events, government, politics, people, products, recent updates. Call multiple times with different queries if first result is incomplete.",
+    description: "Search the internet for real-time information: news, prices, sports scores, exam results, current events, government, politics, people, products, recent updates. Call multiple times with different queries if first result is incomplete.",
     schema: z.object({
       query: z.string().describe("Search query in English only. Be specific."),
     }),
@@ -343,16 +320,12 @@ const getWeatherTool = tool(
   async ({ location }) => {
     try {
       const res = await fetch(
-        `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(
-          location
-        )}&appid=${process.env.OPENWEATHER_API_KEY}&units=metric`
+        `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(location)}&appid=${process.env.OPENWEATHER_API_KEY}&units=metric`
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json();
       return `${d.name}, ${d.sys.country}: ${d.weather[0].description}, Temp: ${d.main.temp}°C (feels like ${d.main.feels_like}°C), Humidity: ${d.main.humidity}%, Wind: ${d.wind.speed} m/s, Visibility: ${(d.visibility / 1000).toFixed(1)}km`;
-    } catch (err) {
-      return `Weather fetch failed: ${err.message}`;
-    }
+    } catch (err) { return `Weather fetch failed: ${err.message}`; }
   },
   {
     name: "get_weather",
@@ -370,9 +343,7 @@ const calculateTool = tool(
       // eslint-disable-next-line no-new-func
       const result = new Function(`"use strict"; return (${sanitized})`)();
       return `${expression} = ${result}`;
-    } catch {
-      return `Could not evaluate: "${expression}"`;
-    }
+    } catch { return `Could not evaluate: "${expression}"`; }
   },
   {
     name: "calculate",
@@ -383,7 +354,6 @@ const calculateTool = tool(
   }
 );
 
-// ✅ FIX: nullable().optional() for API compatibility
 const getDatetimeTool = tool(
   async ({ timezone }) =>
     new Intl.DateTimeFormat("en-IN", {
@@ -422,9 +392,7 @@ const runAgenticLoop = async (lcMessages, modelWithTools) => {
     const toolResults = await Promise.all(
       response.tool_calls.map(async (tc) => {
         const handler = TOOL_MAP[tc.name];
-        const result = handler
-          ? await handler.invoke(tc.args)
-          : `Tool "${tc.name}" not found.`;
+        const result = handler ? await handler.invoke(tc.args) : `Tool "${tc.name}" not found.`;
         console.log(`[Tool] ${tc.name} | ${JSON.stringify(tc.args).slice(0, 100)}`);
         return new ToolMessage({
           tool_call_id: tc.id,
@@ -478,8 +446,7 @@ const runGroqToolPath = async (lcMessages) => {
     const msgs = searchResult
       ? [
           new SystemMessage(
-            SYSTEM_PROMPT +
-              `\n\nREAL-TIME SEARCH RESULTS (use ONLY this for factual answers, cite inline):\n${searchResult}`
+            SYSTEM_PROMPT + `\n\nREAL-TIME SEARCH RESULTS (use ONLY this for factual answers, cite inline):\n${searchResult}`
           ),
           ...lcMessages.slice(1),
         ]
@@ -537,15 +504,10 @@ const tryProvider = async (provider, lcMessages, withTools) => {
 // ══════════════════════════════════════════════════════════════════════════════
 const buildContextMessages = (historyMessages, systemPrompt) => {
   const lcMessages = [new SystemMessage(systemPrompt)];
-
   for (const msg of historyMessages) {
-    if (msg.role === "user") {
-      lcMessages.push(new HumanMessage(msg.content));
-    } else if (msg.role === "ai" || msg.role === "assistant") {
-      lcMessages.push(new AIMessage(msg.content));
-    }
+    if (msg.role === "user") lcMessages.push(new HumanMessage(msg.content));
+    else if (msg.role === "ai" || msg.role === "assistant") lcMessages.push(new AIMessage(msg.content));
   }
-
   return lcMessages;
 };
 
@@ -598,7 +560,6 @@ export const generateResponse = async (historyMessages, options = {}) => {
     const splitPoint = historyMessages.length - maxRecentMessages;
     const oldMessages = historyMessages.slice(0, splitPoint);
     recentMessages = historyMessages.slice(splitPoint);
-
     if (oldMessages.length > 0) {
       console.log(`[AI] Summarizing ${oldMessages.length} old messages for context.`);
       contextSummary = await summarizeOldContext(oldMessages);
@@ -611,13 +572,10 @@ export const generateResponse = async (historyMessages, options = {}) => {
   }
 
   const lcMessages = buildContextMessages(recentMessages, systemPrompt);
-
   const lastUserMsg = [...recentMessages].reverse().find((m) => m.role === "user");
   const userText = lastUserMsg?.content || "";
 
-  if (!userText) {
-    return "Kuch toh bolo bhai! 😄 Kya help chahiye?";
-  }
+  if (!userText) return "Kuch toh bolo bhai! 😄 Kya help chahiye?";
 
   const { needsTools, complexity } = await classifyQuery(userText);
   console.log(`[AI] complexity=${complexity} | needsTools=${needsTools}`);
@@ -635,11 +593,8 @@ export const generateResponse = async (historyMessages, options = {}) => {
       return result;
     } catch (err) {
       console.error(`[AI] ${provider} failed:`, err.message);
-      if (shouldFallback(err)) {
-        markExhausted(provider);
-      } else {
-        throw err;
-      }
+      if (shouldFallback(err)) markExhausted(provider);
+      else throw err;
     }
   }
 
