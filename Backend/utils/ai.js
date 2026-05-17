@@ -30,71 +30,86 @@ ${creatorInfo}
 When asked about creator, use ONLY the above info. Never search for it.
 
 ## CONTEXT AWARENESS — CRITICAL
-- Always read the full conversation history before responding.
-- If user says "what about X?" or "aur X?" — understand they are continuing the PREVIOUS topic.
-- Example: If last topic was "current affairs" and user says "what about NEET 2026?" → they want NEET 2026 NEWS/UPDATES, not eligibility info.
+- Always read the FULL conversation history before responding.
+- "what about X?" or "aur X?" = user is continuing the PREVIOUS topic.
+- Example: previous topic = current affairs → "what about NEET 2026?" = NEET 2026 NEWS, not eligibility info.
 - Connect follow-up questions to the ongoing topic intelligently.
-- Never repeat information already given.
+- Never repeat information already given in this conversation.
 - Detect user type (student/dev/professional) from conversation and adjust depth.
 
-## RESPONSE FORMAT — STRICT RULES
-- Use clean markdown: headings (##, ###), bullet points, bold for key terms.
-- NEVER use ASCII tables (|---|---|) unless user explicitly asks for a table.
+## ANTI-HALLUCINATION — MOST CRITICAL RULE
+You are STRICTLY FORBIDDEN from:
+- Inventing any news, events, statistics, quotes, or dates.
+- Generating "realistic-sounding" headlines that are NOT in the tool results.
+- Citing URLs you did not receive from a tool. NEVER construct or guess URLs.
+- Combining your training knowledge with real-time claims as if both are verified facts.
+- Adding news items beyond what the search tools actually returned.
+
+ONLY report what is EXPLICITLY present in the tool result text.
+If a piece of information is NOT in the tool results → DO NOT include it.
+If you are unsure → say: "I couldn't verify this from current sources."
+
+## CITATION RULES
+- ONLY use URLs that appear word-for-word in the tool results under "Source URL:".
+- Format: [Descriptive Title](exact_url_from_tool_result)
+- NEVER construct a URL like "https://ndtv.com/topic" unless that exact URL appeared in results.
+- If no URL is available for a fact → mention the source name only, no link.
+
+## RESPONSE FORMAT
+- Use clean markdown: ## headings, bullet points, **bold** for key terms.
+- NEVER use ASCII tables (|---|---|) unless user explicitly asks.
 - NEVER output raw JSON or escaped strings like \\n.
-- Separate each major point/section with a blank line.
-- For news/current affairs: each item gets its own ### heading with source link below it.
-- Cite sources as markdown links: [Source Name](URL) — never as *(Source)*.
-- Casual Hinglish + emojis when tone matches 😄
+- Each news item = its own ### heading + bullets + source link.
+- Blank line between each section.
+- Casual Hinglish + emojis when tone fits 😄
 - Match user's language and energy.
 - NEVER announce searching — do it silently. Search queries always in English.
 
-## FACTUALITY — STRICT
-- ONLY use facts from tool results. Never invent news, dates, stats, or political outcomes.
-- If you can't verify something from tools, say: "I couldn't verify this from current sources."
-- Never mix training knowledge with real-time claims.
-
 ## SEARCH STRATEGY
 - Max 3 searches. After 1st result, check if answer is complete. If not → search again with a DIFFERENT query.
-- Search for: news, prices, scores, weather, current leaders, exam results, products, recent events.
-- Skip search for: coding, math, definitions, creative writing, casual chat, creator questions.`;
+- Report ONLY what tools return. Do not pad with extra "context" from training.`;
 
 // ══════════════════════════════════════════════════════════════════════════════
-// CLASSIFIER PROMPT — Now receives conversation context
+// CLASSIFIER PROMPT — Context-aware (sees last 3 messages)
 // ══════════════════════════════════════════════════════════════════════════════
 const CLASSIFIER_PROMPT = `You are a smart query classifier. You see the last few messages of a conversation.
 
-Your job: decide if the LATEST user message needs real-time web/tool search.
+Decide if the LATEST user message needs real-time web/tool search.
 
-CRITICAL CONTEXT RULE:
-- If earlier messages discussed current affairs, news, or recent events → follow-up questions almost certainly need search too.
-- "what about X?", "aur X?", "X ke baare mein?" in a news/current affairs conversation = needs search for X's latest news.
-- Don't classify follow-ups as "educational" if the conversation context is clearly about current events.
+CONTEXT RULE:
+- If earlier messages discussed current affairs/news → follow-up questions almost certainly need search too.
+- "what about X?", "aur X?", "X ke baare mein?" in a news conversation = needs search for X's latest news.
 
-Reply ONLY valid JSON (no markdown, no explanation):
-{"needsTools": true/false, "complexity": "low|medium|high", "intent": "one line describing what user actually wants"}
+Reply ONLY valid JSON (no markdown):
+{"needsTools": true/false, "complexity": "low|medium|high", "intent": "one line: what user actually wants"}
 
-NEEDS SEARCH (true): news, current events, prices, scores, weather, recent results, "latest/current/2025/2026/aaj/abhi/update/kaun/kya hua"
-SKIP SEARCH (false): coding, math, writing help, definitions, stable history, casual chat, follow-up on AI's own previous answer
+SEARCH=true: news, current events, prices, scores, weather, exam results, "latest/current/2025/2026/aaj/abhi/update/kaun/kya hua"
+SEARCH=false: coding, math, writing, definitions, stable history, casual chat, follow-up on AI's own answer
 When in doubt → true`;
 
 // ══════════════════════════════════════════════════════════════════════════════
 // TITLE PROMPT
 // ══════════════════════════════════════════════════════════════════════════════
-const TITLE_PROMPT = `Generate a chat title in max 5 words. Title Case. No quotes or punctuation. Be specific to the topic, not generic. Return ONLY the title.`;
+const TITLE_PROMPT = `Generate a chat title in max 5 words. Title Case. No quotes or punctuation. Be specific to the topic. Return ONLY the title.`;
 
 // ══════════════════════════════════════════════════════════════════════════════
-// GAP CHECK — after first search
+// GAP CHECK — injected after first search
 // ══════════════════════════════════════════════════════════════════════════════
-const GAP_CHECK_PROMPT = `Search done. Is the answer complete with recent, accurate info?
+const GAP_CHECK_PROMPT = `Search done. Is the answer complete with recent, accurate info from the tool results?
 
-If INCOMPLETE → do ONE more web_search with a completely different, more specific query.
+RULES before answering:
+- ONLY use facts, figures, and URLs that appear in the tool results above.
+- Do NOT add any news items, statistics, or quotes from your training knowledge.
+- Do NOT construct or guess any URLs.
 
-If COMPLETE → write the final answer now:
-- Use ## and ### headings
+If INCOMPLETE → do ONE more web_search with a completely different, specific query.
+
+If COMPLETE → write the final answer:
+- ## and ### headings
 - Bullet points for details
-- Each news item as its own section
-- Cite sources as markdown links: [Source Name](URL)
-- NO ASCII tables, NO raw JSON, NO escaped characters
+- Each news item as its own ### section
+- Source links using ONLY URLs from tool results: [Title](exact_url)
+- NO ASCII tables, NO raw JSON
 - MAX 3 searches total`;
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -138,7 +153,7 @@ const markExhausted = (p) => {
 // ══════════════════════════════════════════════════════════════════════════════
 // MODEL FACTORIES
 // ══════════════════════════════════════════════════════════════════════════════
-const openRouterModel = (modelName) =>
+const openRouterModel = (modelName, temperature) =>
   new ChatOpenAI({
     modelName,
     apiKey: process.env.OPENROUTER_API_KEY,
@@ -149,20 +164,20 @@ const openRouterModel = (modelName) =>
         "X-Title": "F.R.I.D.A.Y",
       },
     },
-    temperature: 0.7,
+    temperature: temperature,
     maxTokens: 4096,
   });
 
-const makeGptOss    = () => openRouterModel("openai/gpt-oss-120b:free");
-const makeNemotron  = () => openRouterModel("nvidia/nemotron-3-super-120b-a12b:free");
-const makeGlm       = () => openRouterModel("z-ai/glm-4.5-air:free");
-const makeLlamaFree = () => openRouterModel("meta-llama/llama-3.3-70b-instruct:free");
+const makeGptOss    = () => openRouterModel("openai/gpt-oss-120b:free", 0.2);
+const makeNemotron  = () => openRouterModel("nvidia/nemotron-3-super-120b-a12b:free", 0.7);
+const makeGlm       = () => openRouterModel("z-ai/glm-4.5-air:free", 0.2);
+const makeLlamaFree = () => openRouterModel("meta-llama/llama-3.3-70b-instruct:free", 0.3);
 
 const makeGroq = () =>
   new ChatGroq({
     model: "llama-3.3-70b-versatile",
     apiKey: process.env.GROQ_API_KEY,
-    temperature: 0.2,
+    temperature: 0.1, // Very low for factual accuracy
     maxTokens: 2048,
   });
 
@@ -188,41 +203,37 @@ const makeModel = (provider) => {
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
-// CONTEXT-AWARE CLASSIFIER
-// The KEY fix: classifier now sees last 3 messages, not just current one
+// CONTEXT-AWARE CLASSIFIER — sees last 3 messages
 // ══════════════════════════════════════════════════════════════════════════════
 const classifyQuery = async (recentMessages) => {
   try {
-    // Build a mini context string from last 3 messages
     const contextWindow = recentMessages
-      .slice(-3) // last 3 messages
-      .map((m) => {
-        const role = m.role === "user" ? "User" : "AI";
-        return `${role}: ${m.content.slice(0, 200)}`;
-      })
+      .slice(-3)
+      .map((m) => `${m.role === "user" ? "User" : "AI"}: ${m.content.slice(0, 200)}`)
       .join("\n");
 
     const res = await getClassifier().invoke([
       new SystemMessage(CLASSIFIER_PROMPT),
-      new HumanMessage(`Conversation so far:\n${contextWindow}\n\nClassify the LATEST user message above.`),
+      new HumanMessage(`Conversation so far:\n${contextWindow}\n\nClassify the LATEST user message.`),
     ]);
 
     const clean = (res.content?.trim() || "{}").replace(/```json|```/g, "").trim();
     const parsed = JSON.parse(clean);
-    console.log(`[Router] tools=${parsed.needsTools} | complexity=${parsed.complexity} | intent: ${parsed.intent}`);
+    console.log(`[Router] tools=${parsed.needsTools} | ${parsed.complexity} | intent: ${parsed.intent}`);
     return {
       needsTools: Boolean(parsed.needsTools),
       complexity: parsed.complexity || "medium",
       intent: parsed.intent || "",
     };
   } catch (err) {
-    console.warn("[Router] Classifier failed:", err.message);
+    console.warn("[Router] Classifier error:", err.message);
     return { needsTools: true, complexity: "medium", intent: "unknown" };
   }
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SEARCH — Tavily → Serper fallback
+// Results formatted as plain readable text (no JSON)
 // ══════════════════════════════════════════════════════════════════════════════
 const SearchProvider = { TAVILY: "tavily", SERPER: "serper" };
 const SEARCH_RETRY_MINUTES = 60;
@@ -251,24 +262,29 @@ const markSearchExhausted = (sp) => {
   console.warn(`[Search] ${sp} exhausted.`);
 };
 
-// Format search results as clean readable text (no JSON, no escapes)
 const formatTavilyResults = (data) => {
-  const parts = [];
-  if (data.answer) parts.push(`Quick Answer: ${data.answer}`);
-  data.results?.slice(0, 4).forEach((r, i) => {
-    parts.push(`\n[Result ${i + 1}]\nTitle: ${r.title}\nContent: ${r.content?.slice(0, 500)}\nSource URL: ${r.url}`);
+  const parts = ["=== SEARCH RESULTS (use ONLY these facts) ==="];
+  if (data.answer) parts.push(`\nDirect Answer: ${data.answer}`);
+  data.results?.slice(0, 5).forEach((r, i) => {
+    parts.push(
+      `\n--- Result ${i + 1} ---\nTitle: ${r.title}\nContent: ${r.content?.slice(0, 600)}\nSource URL: ${r.url}`
+    );
   });
-  return parts.join("\n") || "No results found.";
+  parts.push("\n=== END OF SEARCH RESULTS — DO NOT ADD FACTS FROM OUTSIDE THIS ===");
+  return parts.join("\n");
 };
 
 const formatSerperResults = (data) => {
-  const parts = [];
-  if (data.answerBox) parts.push(`Quick Answer: ${data.answerBox.answer || data.answerBox.snippet}`);
-  if (data.knowledgeGraph) parts.push(`Knowledge: ${data.knowledgeGraph.title} — ${data.knowledgeGraph.description || ""}`);
-  data.organic?.slice(0, 4).forEach((r, i) => {
-    parts.push(`\n[Result ${i + 1}]\nTitle: ${r.title}\nSnippet: ${r.snippet}\nSource URL: ${r.link}`);
+  const parts = ["=== SEARCH RESULTS (use ONLY these facts) ==="];
+  if (data.answerBox) parts.push(`\nDirect Answer: ${data.answerBox.answer || data.answerBox.snippet}`);
+  if (data.knowledgeGraph) parts.push(`\nKnowledge Panel: ${data.knowledgeGraph.title} — ${data.knowledgeGraph.description || ""}`);
+  data.organic?.slice(0, 5).forEach((r, i) => {
+    parts.push(
+      `\n--- Result ${i + 1} ---\nTitle: ${r.title}\nContent: ${r.snippet}\nSource URL: ${r.link}`
+    );
   });
-  return parts.join("\n") || "No results found.";
+  parts.push("\n=== END OF SEARCH RESULTS — DO NOT ADD FACTS FROM OUTSIDE THIS ===");
+  return parts.join("\n");
 };
 
 const searchWithTavily = async (query) => {
@@ -320,7 +336,7 @@ const smartSearch = async (query) => {
       if (err.message !== "EXHAUSTED") console.error(`[Search] ${sp}:`, err.message);
     }
   }
-  return "Search unavailable right now.";
+  return "Search unavailable right now. Tell the user you cannot verify current information.";
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -333,7 +349,7 @@ const webSearchTool = tool(
   },
   {
     name: "web_search",
-    description: "Real-time web search: news, prices, scores, events, current affairs, people, products. Use multiple times with DIFFERENT queries if first result is incomplete.",
+    description: "Search the web for real-time info: news, prices, scores, events, current affairs, people, products. Call multiple times with DIFFERENT queries if needed.",
     schema: z.object({ query: z.string().describe("Specific English search query") }),
   }
 );
@@ -390,6 +406,17 @@ const TOOLS = [webSearchTool, getWeatherTool, calculateTool, getDatetimeTool];
 const TOOL_MAP = Object.fromEntries(TOOLS.map((t) => [t.name, t]));
 
 // ══════════════════════════════════════════════════════════════════════════════
+// RESPONSE CLEANER
+// ══════════════════════════════════════════════════════════════════════════════
+const cleanResponse = (text) =>
+  text
+    .replace(/^["']|["']$/g, "")
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t")
+    .replace(/\\\"/g, '"')
+    .trim();
+
+// ══════════════════════════════════════════════════════════════════════════════
 // AGENTIC LOOP
 // ══════════════════════════════════════════════════════════════════════════════
 const runAgenticLoop = async (lcMessages, modelWithTools) => {
@@ -420,7 +447,10 @@ const runAgenticLoop = async (lcMessages, modelWithTools) => {
     }
     if (searchCount >= 3) {
       lcMessages.push(new SystemMessage(
-        "Max searches reached. Give the final answer now using clean markdown. Use [Source Name](URL) for citations. NO tables, NO raw JSON."
+        "Max searches done. Write the final answer NOW using ONLY facts from the tool results above. " +
+        "Use clean markdown with ### headings and bullet points. " +
+        "Cite ONLY URLs that appear in the tool results. " +
+        "DO NOT add any news, stats, or quotes from your own knowledge."
       ));
       console.log("[AI] Max searches — final answer forced.");
     }
@@ -429,18 +459,6 @@ const runAgenticLoop = async (lcMessages, modelWithTools) => {
   }
 
   return cleanResponse(response.content?.trim() || "I couldn't generate a response.");
-};
-
-// ══════════════════════════════════════════════════════════════════════════════
-// RESPONSE CLEANER — strips escaped chars, raw JSON artifacts
-// ══════════════════════════════════════════════════════════════════════════════
-const cleanResponse = (text) => {
-  return text
-    .replace(/^["']|["']$/g, "")   // strip wrapping quotes
-    .replace(/\\n/g, "\n")          // unescape newlines
-    .replace(/\\t/g, "\t")          // unescape tabs
-    .replace(/\\\"/g, '"')          // unescape quotes
-    .trim();
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -464,7 +482,13 @@ const runGroqToolPath = async (lcMessages) => {
     const searchResult = await smartSearch(query).catch(() => "");
 
     const msgs = searchResult
-      ? [new SystemMessage(SYSTEM_PROMPT + `\n\nSEARCH RESULTS (use ONLY this, cite as markdown links):\n${searchResult}`), ...lcMessages.slice(1)]
+      ? [
+          new SystemMessage(
+            SYSTEM_PROMPT +
+            `\n\nSEARCH RESULTS — use ONLY these facts, cite ONLY these URLs:\n${searchResult}`
+          ),
+          ...lcMessages.slice(1),
+        ]
       : lcMessages;
 
     const response = await model.invoke(msgs);
@@ -522,7 +546,7 @@ const summarizeOldContext = async (oldMessages) => {
       .map((m) => `${m.role === "user" ? "U" : "AI"}: ${m.content.slice(0, 250)}`)
       .join("\n");
     const res = await makeGroq().invoke([
-      new SystemMessage("Summarize in 3 bullet points: key topics, user preferences, important facts established. Be very concise."),
+      new SystemMessage("Summarize in 3 bullet points: topics discussed, user preferences, key facts. Very concise."),
       new HumanMessage(formatted),
     ]);
     return res.content?.trim() || null;
@@ -571,7 +595,7 @@ export const generateResponse = async (historyMessages, options = {}) => {
   const userText = lastUserMsg?.content || "";
   if (!userText) return "Kuch toh bolo bhai! 😄";
 
-  // ✅ KEY FIX: Pass recentMessages (with context) to classifier, not just userText
+  // Pass full recentMessages for context-aware classification
   const { needsTools, intent } = await classifyQuery(recentMessages);
   console.log(`[AI] intent="${intent}" | needsTools=${needsTools}`);
 
