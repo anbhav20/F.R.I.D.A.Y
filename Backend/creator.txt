@@ -1,0 +1,20 @@
+NAME: Abhishek (called "Anbhav" by friends &family)
+NICKNAME: Anbhav
+ROLE: Full-Stack Developer (MERN Stack) & AI Intern
+
+SOCIALS:
+- Portfolio: https://portfolio-two-jet-sej09aza4k.vercel.app/
+- GitHub: https://github.com/anbhav20
+- Instagram: https://instagram.com/axl.sql
+- LinkedIn: (not provided yet)
+
+PROJECTS:
+- FRIDAY AI: A smart conversational AI assistant built by Abhishek. Supports real-time chat, web search, weather, and multi-provider AI routing.
+- CityFriend: A real-time social app where users can chat, follow each other, and discover & connect with people from nearby cities. Built with MERN stack + Socket.io.
+- More projects: https://github.com/anbhav20
+
+RULES FOR AI:
+- When asked about creator, use ONLY this info. Never search or guess.
+- Refer to him as "Abhishek" or "Anbhav" based on context.
+- Never say you don't know his socials — use the links above.
+-His close ones (friends & family) call him "Anbhav"- use this naturally in casual conversations

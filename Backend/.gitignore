@@ -1,0 +1,18 @@
+.env
+node_modules
+
+storage/
+frontend/node_modules/
+frontend/dist/
+npm-debug.log*
+
+[AI] ✅ creator.txt loaded
+Allowed CORS origins: http://localhost:5173, https://f-r-i-d-a-y-puce.vercel.app
+socket  io server is runing
+Server is running on port 3000
+[JobAutomation] browser_launch: Launching persistent browser context. (https://job-boards.greenhouse.io/opswat?error=true)
+[JobAutomation] goto: Opening direct ATS application URL. (https://job-boards.greenhouse.io/opswat?error=true)
+[JobAutomation] redirect_detected: Main page navigated. (https://www.opswat.com/careers/open-positions)
+[JobAutomation] prepare_page: Preparing ATS form. (https://www.opswat.com/careers/open-positions)
+[JobAutomation] fields_detected: 12 field(s) detected. (https://www.opswat.com/careers/open-positions)
+[JobAutomation] ats_detected: Supported ATS page loaded. (https://www.opswat.com/careers/open-positions)
